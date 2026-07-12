@@ -5,8 +5,8 @@
 </h1>
 
 <p align="center">
-  🤗 <a href="https://huggingface.co/collections/inclusionAI/singguard"><b>Hugging Face</b></a>&nbsp;&nbsp; | &nbsp;&nbsp;
-  🤖 <a href="https://modelscope.cn/collections/inclusionAI/SingGuard"><b>ModelScope</b></a>&nbsp;&nbsp; | &nbsp;&nbsp;
+  🤗 <a href="https://huggingface.co/collections/inclusionAI/sing-guard"><b>Hugging Face</b></a>&nbsp;&nbsp; | &nbsp;&nbsp;
+  🤖 <a href="https://modelscope.cn/collections/inclusionAI/Sing-Guard"><b>ModelScope</b></a>&nbsp;&nbsp; | &nbsp;&nbsp;
   📄 <a href="https://arxiv.org/abs/2606.22873"><b>Technical Report</b></a>
 </p>
 
