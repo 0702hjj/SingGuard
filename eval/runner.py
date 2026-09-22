@@ -119,12 +119,29 @@ def main() -> int:
     ap.add_argument("--concurrency", type=int, default=32)
     ap.add_argument("--batch-size", type=int, default=4, help="hf backend batch size")
     ap.add_argument("--port", type=int, default=8199)
+    ap.add_argument("--gpu-util", type=float, default=None,
+                    help="override gpu_memory_utilization (use ~0.6 on a shared GPU)")
+    ap.add_argument("--max-tokens", type=int, default=None, help="override gen.max_tokens")
+    ap.add_argument("--thinking", default=None,
+                    help="override chat_template_kwargs.thinking_type (fast|fast-slow|slow)")
     ap.add_argument("--no-resume", action="store_true")
     args = ap.parse_args()
     args._server = None
 
     models = load_yaml("models.yaml")
     datasets = load_yaml("datasets.yaml")
+    models.pop("defaults", None)      # YAML anchor key, not a model
+    datasets.pop("defaults", None)    # ditto
+
+    if args.max_tokens is not None or args.thinking:
+        for mk_ in models.values():
+            if not isinstance(mk_, dict):
+                continue
+            if args.max_tokens is not None:
+                mk_.setdefault("gen", {})["max_tokens"] = args.max_tokens
+            if args.thinking:
+                kw = mk_.setdefault("chat_template_kwargs", {})
+                kw["thinking_type"] = args.thinking
 
     if args.models in ("", "all"):
         mkeys = [k for k, v in models.items() if isinstance(v, dict) and v.get("enabled") is not False] \
@@ -157,7 +174,8 @@ def main() -> int:
             server = VLLMServer(
                 str(EVAL_DIR / mcfg["path"]), port=args.port,
                 max_model_len=mcfg.get("max_model_len", 8192),
-                gpu_memory_utilization=mcfg.get("gpu_memory_utilization", 0.90),
+                gpu_memory_utilization=(args.gpu_util if args.gpu_util is not None
+                                        else mcfg.get("gpu_memory_utilization", 0.90)),
                 log_file=str(LOGS / f"vllm_{mk}.log"))
             try:
                 server.start()
@@ -200,7 +218,17 @@ def main() -> int:
             server.stop()
             args._server = None
 
-    print("\nnext: uv run python aggregate.py   # -> outputs/table4_repro.csv")
+    # Auto-refresh the Table-4 CSVs (reproduction + delta vs paper) after every run.
+    if (RESULTS / "results.csv").exists():
+        try:
+            import aggregate
+            print("\n" + "=" * 70)
+            aggregate.main()
+            print("=" * 70)
+        except Exception as e:  # noqa: BLE001
+            log.warning("auto-aggregation failed: %s (run `python aggregate.py` manually)", e)
+    else:
+        print("\nnext: uv run python aggregate.py   # -> outputs/table4_repro.csv")
     return rc
 
 

@@ -44,13 +44,17 @@ def parse_decision(text: str, *, where: str = "first_line") -> int | None:
         where = "first_line"
 
     if where == "first_line":
+        # Hybrid (fast-slow) outputs: the first line is a PROVISIONAL decision; when the model
+        # escalates, the reviewed verdict arrives in the trailing <answer> tag and supersedes it
+        # (paper Sec. 2.6). So the <answer> tag wins whenever present; early-exit outputs agree
+        # on both anyway. Falls back to the leading token for guards without an <answer> tag.
+        m = _ANSWER.search(text)
+        if m:
+            return _norm(m.group(1).strip())
         first = text.splitlines()[0]
         m = _FIRST_LINE.match(first)
         if m:
             return UNSAFE if m.group(1).lower() == "unsafe" else SAFE
-        m = _ANSWER.search(text)
-        if m:
-            return _norm(m.group(1).strip())
         return None
 
     if where == "last_match":

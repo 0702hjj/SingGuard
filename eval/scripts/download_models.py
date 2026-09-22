@@ -21,13 +21,14 @@ sys.path.insert(0, str(EVAL_DIR))
 
 def load_models() -> dict:
     cfg = yaml.safe_load((EVAL_DIR / "configs" / "models.yaml").read_text())
-    return {k: v for k, v in cfg.items() if isinstance(v, dict)}
+    return {k: v for k, v in cfg.items() if isinstance(v, dict) and k != "defaults"}
 
 
 def looks_complete(dest: Path) -> bool:
-    has_cfg = (dest / "config.json").exists()
-    has_weights = any(dest.glob("*.safetensors")) or (dest / "pytorch_model.bin").exists()
-    return has_cfg and has_weights
+    """Only trust our own marker file written after a successful snapshot_download.
+    Heuristics on filenames are unreliable: interrupted ModelScope transfers keep the
+    final filename on partial shards."""
+    return (dest / ".complete").exists()
 
 
 def download_modelscope(repo_id: str, dest: Path) -> None:
@@ -78,14 +79,14 @@ def main() -> int:
             print(f"[modelscope] {k} <- {v['ms_id']}")
             try:
                 download_modelscope(v["ms_id"], dest)
-                done = looks_complete(dest)
+                done = True
             except Exception as e:  # noqa: BLE001
                 print(f"  modelscope failed: {e}")
         if not done and v.get("hf_id") and v["hf_id"] != "TBD":
             print(f"[hf-mirror] {k} <- {v['hf_id']}")
             try:
                 download_hf(v["hf_id"], dest)
-                done = looks_complete(dest)
+                done = True
             except Exception as e:  # noqa: BLE001
                 print(f"  hf download failed: {e}")
                 print("  (gated model? accept the license on the HF web page, then "
@@ -94,6 +95,7 @@ def main() -> int:
             failures.append(k)
             print(f"[FAIL] {k}")
         else:
+            (dest / ".complete").write_text("ok\n")
             print(f"[ok] {k} -> {dest}")
 
     if failures:

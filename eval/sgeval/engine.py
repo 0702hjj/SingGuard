@@ -47,7 +47,7 @@ class VLLMServer:
         self.model_path = model_path
         self.port = port
         self.max_model_len = max_model_len
-        self.gpu_mem = gpu_memory_util
+        self.gpu_mem = gpu_memory_utilization
         self.timeout_s = timeout_s
         self.log_file = log_file
         self.proc: subprocess.Popen | None = None
@@ -70,8 +70,14 @@ class VLLMServer:
             "--max-model-len", str(self.max_model_len),
             "--gpu-memory-utilization", str(self.gpu_mem),
             "--trust-remote-code",
-            "--disable-log-requests",
         ]
+        # SingGuard-style models ship the guard prompt as a standalone chat_template.jinja
+        # (tokenizer_config.chat_template is empty). Older vLLM only reads the string field
+        # and silently falls back to the base model's template -- without the risk-category
+        # system prompt. Always point vLLM at the jinja file when present.
+        jinja = Path(self.model_path) / "chat_template.jinja"
+        if jinja.exists():
+            cmd += ["--chat-template", str(jinja)]
         log.info("starting vLLM: %s", " ".join(cmd))
         logf = open(self.log_file, "ab") if self.log_file else subprocess.DEVNULL
         self.proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT)
@@ -183,8 +189,11 @@ def run_dataset_hf(model_path: str, samples: list[dict], adapter, gen_args: dict
         if s.get("response"):
             msgs.append({"role": "assistant",
                          "content": [{"type": "text", "text": s["response"]}]})
+        # chat_template_kwargs must be passed as a dict argument -- top-level kwargs like
+        # thinking_type are silently ignored by processor.apply_chat_template.
         prompt = processor.apply_chat_template(
-            msgs, tokenize=False, add_generation_prompt=True, **(chat_template_kwargs or {}))
+            msgs, tokenize=False, add_generation_prompt=True,
+            chat_template_kwargs=dict(chat_template_kwargs or {}))
         images = [pil(s["image"])] if s.get("image") else []
         return prompt, images
 
