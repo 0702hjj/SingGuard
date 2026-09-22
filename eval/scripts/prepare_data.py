@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import random
@@ -51,15 +52,15 @@ def load_datasets_cfg() -> dict:
 
 # ----------------------------------------------------------------- download
 
-def download_raw(hf_id: str, raw_dir: Path) -> None:
-    if any(p for p in raw_dir.rglob("*") if p.is_file()):
-        print(f"[skip] {raw_dir} already populated")
-        return
+def download_raw(hf_id: str, raw_dir: Path, allow_patterns: list[str] | None = None) -> None:
     os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")  # xet CDN transfers proved flaky
     from huggingface_hub import snapshot_download
     raw_dir.mkdir(parents=True, exist_ok=True)
     print(f"[download] {hf_id} -> {raw_dir}")
-    snapshot_download(hf_id, repo_type="dataset", local_dir=str(raw_dir))
+    # snapshot_download resumes: existing complete files are kept, missing ones fetched
+    snapshot_download(hf_id, repo_type="dataset", local_dir=str(raw_dir),
+                      allow_patterns=allow_patterns, max_workers=4)
 
 
 # ----------------------------------------------------------------- generic helpers
@@ -115,16 +116,16 @@ def pick(row: dict, cols: list[str]):
 
 def parse_label(val) -> int:
     if isinstance(val, bool):
-        return 0 if val else 1          # safe=True -> 0
+        return 0 if val else 1          # safe-polarity columns: True/"yes" -> safe
     if isinstance(val, (int, float)):
         v = int(val)
         if v in (0, 1):
             return v                    # assume 1=unsafe
         raise SchemaError(f"ambiguous numeric label {val}")
     s = str(val).strip().lower()
-    if s in ("unsafe", "1", "true_unsafe", "bad"):
+    if s in ("unsafe", "1", "true_unsafe", "bad", "no", "false"):
         return 1
-    if s in ("safe", "0", "false", "good"):
+    if s in ("safe", "0", "good", "yes", "true"):
         return 0
     raise SchemaError(f"unrecognized label value {val!r}")
 
@@ -164,124 +165,125 @@ def iter_rows(raw_dir: Path):
 # ----------------------------------------------------------------- loaders
 
 def load_vlguard(raw_dir: Path, key: str):
-    """VLGuard test (1,000): original repo ships per-task JSON files whose names carry the
-    label (text_query_safe.json / image_unsafe.json / ...); the HF parquet variant carries a
-    messages column. Handle both."""
+    """VLGuard test (1,000). Actual HF layout (verified): test.json (flat list with
+    id/image/safe/instr-resp) + test.zip -> extracted at test_extracted/test/<image>.
+    Query = instruction (unsafe items) / safe_instruction (safe items); response kept so the
+    paper's full (query, image, response) triple is judged; label = not safe."""
+    out = []
+    tj = raw_dir / "test.json"
+    img_root = raw_dir / "test_extracted" / "test"
+    if tj.exists() and img_root.exists():
+        entries = json.loads(tj.read_text())
+        for e in entries:
+            pair = (e.get("instr-resp") or [{}])[0]
+            q = pair.get("instruction") or pair.get("safe_instruction") or ""
+            imgp = img_root / e["image"]
+            img = str(imgp.relative_to(DATA_DIR)) if imgp.exists() else None
+            out.append({"image": img, "query": str(q), "response": pair.get("response"),
+                        "label": 0 if e.get("safe") else 1, "src": "test.json"})
+        n_pos = sum(r["label"] for r in out)
+        n_img = sum(1 for r in out if r["image"])
+        print(f"  [note] VLGuard: {n_pos}/{len(out)} unsafe, {n_img} with image")
+        if not out:
+            raise SchemaError("VLGuard: test.json parsed to 0 rows")
+        return out
+
+    # fallback: parquet-with-messages or *_safe/*_unsafe.json legacy layouts
     cache = DATA_DIR / "extracted" / key
     rows = list(iter_rows(raw_dir))
-    out = []
-    if rows and rows[0][0].get("messages"):
+    if rows and isinstance(rows[0][0], dict) and rows[0][0].get("messages"):
         for i, (row, src) in enumerate(rows):
             label = pick(row, LABEL_COLS)
             if label is None:
-                raise SchemaError(
-                    "VLGuard parquet has no label column; inspect with inspect_data.py "
-                    "and fall back to the original JSON-file layout")
-            label = parse_label(label)
+                raise SchemaError("VLGuard parquet has no label column")
             msgs = row["messages"]
             query = next((c.get("text") for m in msgs if m["role"] == "user"
                           for c in m["content"] if c.get("type") == "text"), "")
             response = next((c.get("text") for m in msgs if m["role"] == "assistant"
                              for c in m["content"] if c.get("type") == "text"), None)
-            img = materialize_image(pick(row, ["images", "image"]) or
-                                    next((c for m in msgs for c in m["content"]
-                                          if c.get("type") == "image"), None),
+            img = materialize_image(pick(row, ["images", "image"]),
                                     cache, f"vlguard_{i}", raw_dir)
             out.append({"image": img, "query": query or "", "response": response,
-                        "label": label, "src": src})
-    else:
-        # original layout: test/<task>_<label>.json + img/ referenced inside entries
-        for jf in sorted(raw_dir.rglob("*.json")):
-            name = jf.name.lower()
-            if "_safe" not in name and "_unsafe" not in name:
-                continue
-            label = 1 if "unsafe" in name else 0
-            try:
-                entries = json.loads(jf.read_text())
-            except Exception:  # noqa: BLE001
-                continue
-            for i, e in enumerate(entries):
-                msgs = e.get("messages", [])
-                query = next((c.get("text") for m in msgs if m.get("role") == "user"
-                              for c in m.get("content", []) if c.get("type") == "text"), "")
-                response = next((c.get("text") for m in msgs if m.get("role") == "assistant"
-                                 for c in m.get("content", []) if c.get("type") == "text"), None)
-                img_rel = (e.get("images") or [None])[0] or \
-                    next((c.get("path") for m in msgs for c in m.get("content", [])
-                          if c.get("type") == "image"), None)
-                img = None
-                if img_rel:
-                    cand = [raw_dir / img_rel, raw_dir / "img" / img_rel,
-                            raw_dir / "img" / "test" / Path(img_rel).name,
-                            raw_dir / Path(img_rel).name]
-                    img = next((str(c.relative_to(DATA_DIR)) for c in cand if c.exists()), None)
-                out.append({"image": img, "query": query or "", "response": response,
-                            "label": label, "src": jf.name})
+                        "label": parse_label(label), "src": src})
     if not out:
-        raise SchemaError("VLGuard: no rows parsed")
+        raise SchemaError("VLGuard: no rows parsed (unzip test.zip first)")
     return out
 
 
 def load_jailbreakv(raw_dir: Path, key: str):
-    """JailBreakV-28K: CSV of jailbreak queries (+ image paths for SD/FigStep/MEME sources).
-    All entries are adversarial queries -> gold unsafe; if a label column exists, use it."""
-    rows = list(iter_rows(raw_dir))
-    if not rows:
-        raise SchemaError("JailBreakV: no CSV rows found")
-    out = []
-    for i, (row, src) in enumerate(rows):
-        q = pick(row, QUERY_COLS)
+    """JailBreakV-28K. Full csv = JailBreakV_28K/JailBreakV_28K.csv (28,000 adversarial
+    queries, gold unsafe). NOTE: the HF repo only hosts ~100 images per source dir (~300
+    total); the rest live on Google Drive in the original release. We force-include every
+    image-resolvable row and fill up with a deterministic text-only selection so the 1,000
+    sample stays multimodal. mini_/RedTeam_2K csvs are auxiliary and excluded."""
+    csv_path = raw_dir / "JailBreakV_28K" / "JailBreakV_28K.csv"
+    if not csv_path.exists():
+        raise SchemaError(f"JailBreakV: {csv_path} missing")
+    img_base = raw_dir / "JailBreakV_28K"
+    with_img, text_only = [], []
+    for row in csv.DictReader(csv_path.open()):
+        q = row.get("jailbreak_query") or row.get("query") or ""
         if not q:
-            raise SchemaError(f"JailBreakV: no query column in {row.keys()}")
-        label = pick(row, LABEL_COLS)
-        img = materialize_image(pick(row, ["image", "image_path", "img_path", "image_file"]),
-                                DATA_DIR / "extracted" / key, f"jbv_{i}", raw_dir)
-        out.append({"image": img, "query": str(q), "response": None,
-                    "label": parse_label(label) if label is not None else 1, "src": src})
-    n_pos = sum(r["label"] for r in out)
-    if n_pos != len(out):
-        print(f"  [note] JailBreakV: {len(out) - n_pos}/{len(out)} rows are labeled safe "
-              f"(paper likely evaluates all-unsafe; verify against inspect_data.py)")
-    return out
+            continue
+        img = None
+        rel = (row.get("image_path") or "").strip()
+        if rel and (img_base / rel).exists():
+            img = str((img_base / rel).relative_to(DATA_DIR))
+        (with_img if img else text_only).append(
+            {"image": img, "query": q, "response": None, "label": 1, "src": "JailBreakV_28K.csv"})
+    print(f"  [note] JailBreakV: {len(with_img)} rows with local image, "
+          f"{len(text_only)} text-only (HF hosts only ~300 of the 28K images)")
+    rng = random.Random(42)
+    fill = rng.sample(text_only, min(700, len(text_only)))
+    return with_img + fill
 
 
 def load_spavl(raw_dir: Path, key: str):
-    """SPA-VL: preference pairs; used query-side. Label must come from an explicit column
-    (the paper's F1 range implies a mixed label distribution)."""
+    """SPA-VL test split: harm-*.parquet (unsafe queries) + help-*.parquet (safe queries).
+    Label comes from the filename; an explicit label column wins if present."""
     rows = list(iter_rows(raw_dir))
     if not rows:
-        raise SchemaError("SPA-VL: no rows found")
+        raise SchemaError("SPA-VL: no rows found (did the test/* download complete?)")
     out = []
     for i, (row, src) in enumerate(rows):
         q = pick(row, QUERY_COLS)
         label = pick(row, LABEL_COLS)
         if label is None:
-            raise SchemaError(
-                f"SPA-VL row has no label column (cols={list(row.keys())}). Inspect the raw "
-                "data, then either map the right column in LABEL_COLS or (if the split really "
-                "is all-unsafe) default label=1 with a printed warning.")
+            low = str(src).lower()
+            if "harm" in low:
+                label = 1
+            elif "help" in low:
+                label = 0
+            else:
+                raise SchemaError(
+                    f"SPA-VL: no label column and filename {src!r} is neither harm/help")
         img = materialize_image(pick(row, ["image", "images", "image_path"]),
                                 DATA_DIR / "extracted" / key, f"spa_{i}", raw_dir)
         out.append({"image": img, "query": str(q or ""), "response": None,
-                    "label": parse_label(label), "src": src})
+                    "label": parse_label(label), "src": str(src)})
+    n_pos = sum(r["label"] for r in out)
+    print(f"  [note] SPA-VL: {n_pos}/{len(out)} unsafe (from harm/help files)")
     return out
 
 
 def load_vlsbench(raw_dir: Path, key: str):
-    """VLSBench (2,241): image + query + safe/unsafe label."""
+    """VLSBench (2,247 rows): visual jailbreak attacks across 6 harm categories, all
+    gold-unsafe (verified: no benign class in the release). Query = instruction."""
     rows = list(iter_rows(raw_dir))
     if not rows:
         raise SchemaError("VLSBench: no rows found")
     out = []
     for i, (row, src) in enumerate(rows):
         q = pick(row, QUERY_COLS)
+        if not q:
+            continue
         label = pick(row, LABEL_COLS)
-        if label is None:
-            raise SchemaError(f"VLSBench: no label column (cols={list(row.keys())})")
-        img = materialize_image(pick(row, ["image", "images", "image_path"]),
+        img = materialize_image(pick(row, ["image", "images"]),
                                 DATA_DIR / "extracted" / key, f"vls_{i}", raw_dir)
-        out.append({"image": img, "query": str(q or ""), "response": None,
-                    "label": parse_label(label), "src": src})
+        out.append({"image": img, "query": str(q), "response": None,
+                    "label": parse_label(label) if label is not None else 1, "src": str(src)})
+    n_pos = sum(r["label"] for r in out)
+    print(f"  [note] VLSBench: {n_pos}/{len(out)} unsafe (all-attack benchmark)")
     return out
 
 
@@ -325,14 +327,13 @@ def load_beavertailsv(raw_dir: Path, key: str):
         base = {"image": img, "query": str(q or ""), "src": src}
         safe_r = pick(row, ["response_safe", "safe_response", "chosen"])
         unsafe_r = pick(row, ["response_unsafe", "unsafe_response", "rejected"])
-        is_safe = pick(row, ["is_safe"])
+        is_safe = pick(row, ["is_safe", "is_response_safe"])
         if safe_r and unsafe_r:
             out.append({**base, "response": str(safe_r), "label": 0})
             out.append({**base, "response": str(unsafe_r), "label": 1})
         elif pick(row, RESPONSE_COLS) is not None and is_safe is not None:
             r = pick(row, RESPONSE_COLS)
-            out.append({**base, "response": str(r), "label": 0 if str(is_safe).lower() in
-                        ("true", "1") else 1})
+            out.append({**base, "response": str(r), "label": parse_label(is_safe)})
         else:
             raise SchemaError(
                 f"BeaverTails-V row lacks response pairs / is_safe (cols={list(row.keys())})")
@@ -461,7 +462,7 @@ def main() -> int:
             continue
         if not args.no_download:
             try:
-                download_raw(c["hf_id"], raw_dir)
+                download_raw(c["hf_id"], raw_dir, c.get("allow_patterns"))
             except Exception as e:  # noqa: BLE001
                 print(f"[FAIL] {k}: download {c['hf_id']}: {e}", file=sys.stderr)
                 rc = 1

@@ -29,19 +29,21 @@ jailbreakv:
 spa-vl:
   <<: *defaults
   label: SPA-VL
-  hf_id: dsty/SPA-VL
+  hf_id: sqrti/SPA-VL
+  allow_patterns: ["test/*"]        # skip the 1.3GB train.zip; test/ has harm-*.parquet (unsafe) + help-*.parquet (safe)
   loader: spavl
 
 vlsbench:
   <<: *defaults
   label: VLSBench
-  hf_id: ys-zong/VLSBench
+  hf_id: Foreshhh/vlsbench
+  allow_patterns: ["data/*"]        # parquet version with embedded images; skip imgs.tar duplicate
   loader: vlsbench
 
 mm-safety:
   <<: *defaults
   label: MM-Safety
-  hf_id: isXinLiu/MM-SafetyBench
+  hf_id: PKU-Alignment/MM-SafetyBench
   loader: mmsafety
 
 beavertails-v:
