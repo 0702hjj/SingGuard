@@ -1,0 +1,68 @@
+# Dataset registry for Table 4 reproduction (8 columns).
+#
+# Fields:
+#   hf_id    : HuggingFace dataset repo (downloaded through HF_ENDPOINT=https://hf-mirror.com)
+#   loader   : normalization function in scripts/prepare_data.py
+#   sample   : per-dataset sample cap (fixed seed, stratified by label)
+#   verified : false = loader written from the dataset's public schema without local download;
+#              ALWAYS run `uv run python scripts/inspect_data.py <key>` on the server after
+#              downloading and before trusting the numbers; loaders raise loud errors on
+#              schema mismatch instead of guessing.
+
+defaults: &defaults
+  sample: 1000
+  seed: 42
+  verified: false
+
+vlguard:
+  <<: *defaults
+  label: VLGuard
+  hf_id: ys-zong/VLGuard
+  loader: vlguard
+
+jailbreakv:
+  <<: *defaults
+  label: JailBreakV
+  hf_id: JailbreakV-28k/JailBreakV-28K
+  loader: jailbreakv
+
+spa-vl:
+  <<: *defaults
+  label: SPA-VL
+  hf_id: dsty/SPA-VL
+  loader: spavl
+
+vlsbench:
+  <<: *defaults
+  label: VLSBench
+  hf_id: ys-zong/VLSBench
+  loader: vlsbench
+
+mm-safety:
+  <<: *defaults
+  label: MM-Safety
+  hf_id: isXinLiu/MM-SafetyBench
+  loader: mmsafety
+
+beavertails-v:
+  <<: *defaults
+  label: BeaverTails-V
+  hf_id: PKU-Alignment/BeaverTails-V
+  loader: beavertailsv
+
+# MMDS comes from the LLaVAShield project (https://leost123456.github.io, Huang et al. 2025).
+# No stable public mirror confirmed; place a normalized file at
+#   data/raw/mmds/mmds_normalized.csv   (columns: query,image_path,response,label,side)
+# with side in {q, r}; the loader then emits both data/mmds-q/ and data/mmds-r/.
+# Until then these two columns are skipped gracefully.
+mmds-q:
+  <<: *defaults
+  label: MMDS-Q
+  loader: mmds
+  manual: true
+
+mmds-r:
+  <<: *defaults
+  label: MMDS-R
+  loader: mmds
+  manual: true

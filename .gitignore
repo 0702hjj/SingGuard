@@ -1,2 +1,12 @@
 .DS_Store
 assets/.DS_Store
+
+# eval harness artifacts
+eval/.venv/
+eval/data/
+eval/models/
+eval/logs/
+eval/results/
+eval/outputs/
+__pycache__/
+*.pyc

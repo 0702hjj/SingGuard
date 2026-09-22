@@ -1,0 +1,139 @@
+# Model registry for Table 4 reproduction.
+#
+# Fields:
+#   label               : row name in the reproduced table (aligned with configs/table4_paper.csv)
+#   adapter             : prompt/parse strategy, see sgeval/adapters.py
+#   engine              : vllm (default) or hf (transformers fallback)
+#   ms_id / hf_id       : ModelScope id (CN direct) / HuggingFace id (via hf-mirror)
+#   path                : local dir populated by scripts/download_models.py (relative to eval/)
+#   gen                 : decoding args (greedy everywhere, matching the paper's protocol)
+#   chat_template_kwargs: passed through vLLM `chat_template_kwargs` into apply_chat_template
+#   max_model_len       : vLLM context length
+#
+# Baseline prompts are approximations: the paper does not release the exact prompts used for
+# baseline rows (Appendix A only documents SingGuard's template). Each adapter follows the
+# corresponding model card as closely as practical.
+
+defaults: &defaults
+  engine: vllm
+  gpu_memory_utilization: 0.90
+  gen: {temperature: 0.0}
+
+# ---------------------------------------------------------------- enabled set
+sing-guard-2b:
+  <<: *defaults
+  label: SingGuard-2B
+  adapter: singguard
+  ms_id: inclusionAI/Sing-Guard-2b
+  hf_id: inclusionAI/Sing-Guard-2b
+  path: models/sing-guard-2b
+  max_model_len: 8192
+  gen: {temperature: 0.0, max_tokens: 128}
+  chat_template_kwargs: {thinking_type: fast}   # paper: fast mode for high-throughput benchmark evaluation
+
+sing-guard-4b:
+  <<: *defaults
+  label: SingGuard-4B
+  adapter: singguard
+  ms_id: inclusionAI/Sing-Guard-4b
+  hf_id: inclusionAI/Sing-Guard-4b
+  path: models/sing-guard-4b
+  max_model_len: 8192
+  gen: {temperature: 0.0, max_tokens: 128}
+  chat_template_kwargs: {thinking_type: fast}
+
+sing-guard-8b:
+  <<: *defaults
+  label: SingGuard-8B
+  adapter: singguard
+  ms_id: inclusionAI/Sing-Guard-8b
+  hf_id: inclusionAI/Sing-Guard-8b
+  path: models/sing-guard-8b
+  max_model_len: 8192
+  gen: {temperature: 0.0, max_tokens: 128}
+  chat_template_kwargs: {thinking_type: fast}
+
+qwen3-vl-4b:
+  <<: *defaults
+  label: Qwen3-VL-4B
+  adapter: generic_vlm_guard
+  ms_id: Qwen/Qwen3-VL-4B
+  hf_id: Qwen/Qwen3-VL-4B
+  path: models/qwen3-vl-4b
+  max_model_len: 8192
+  gen: {temperature: 0.0, max_tokens: 512}
+  chat_template_kwargs: {enable_thinking: false}
+
+qwen3-vl-8b:
+  <<: *defaults
+  label: Qwen3-VL-8B
+  adapter: generic_vlm_guard
+  ms_id: Qwen/Qwen3-VL-8B
+  hf_id: Qwen/Qwen3-VL-8B
+  path: models/qwen3-vl-8b
+  max_model_len: 8192
+  gen: {temperature: 0.0, max_tokens: 512}
+  chat_template_kwargs: {enable_thinking: false}
+
+guardreasoner-vl-7b:
+  <<: *defaults
+  label: GuardReasoner-VL-7B
+  adapter: guardreasoner
+  hf_id: yueliu1999/GuardReasoner-VL-7B
+  path: models/guardreasoner-vl-7b
+  max_model_len: 8192
+  gen: {temperature: 0.0, max_tokens: 512}      # reasoning model: longer output, parse the final verdict
+
+llavaguard-7b:
+  <<: *defaults
+  label: LlavaGuard
+  adapter: llavaguard
+  hf_id: AIML-Toulouse/LlavaGuard-7b
+  path: models/llavaguard-7b
+  max_model_len: 4096                           # LLaVA-1.5 context limit
+  gen: {temperature: 0.0, max_tokens: 256}
+
+# ---------------------------------------------------------------- optional rows
+# Available in the registry but not run by default. Fill path/ids and move into the enabled set
+# once access is sorted out on the server.
+
+safeguard-vl:
+  <<: *defaults
+  enabled: false
+  label: SafeGuard-VL
+  adapter: generic_vlm_guard
+  hf_id: TBD   # Piao et al. 2026 checkpoint id - verify before enabling
+  path: models/safeguard-vl
+  max_model_len: 8192
+  gen: {temperature: 0.0, max_tokens: 512}
+
+shieldgemma-2-4b:
+  <<: *defaults
+  enabled: false           # gated on HF: accept license on the web page, then export HF_TOKEN
+  label: ShieldGemma-2
+  adapter: shieldgemma2
+  hf_id: google/shieldgemma-2-4b-it
+  path: models/shieldgemma-2-4b
+  max_model_len: 8192
+  gen: {temperature: 0.0, max_tokens: 64}
+
+llama-guard3-vision-11b:
+  <<: *defaults
+  enabled: false           # gated on HF; use engine hf if vllm load fails
+  engine: hf
+  label: LlamaGuard3-Vision-11B
+  adapter: llamaclassic
+  hf_id: meta-llama/Llama-Guard-3-11B-Vision
+  path: models/llama-guard3-vision-11b
+  max_model_len: 8192
+  gen: {temperature: 0.0, max_tokens: 64}
+
+llama-guard4-12b:
+  <<: *defaults
+  enabled: false           # gated on HF
+  label: LlamaGuard4
+  adapter: llamaclassic
+  hf_id: meta-llama/Llama-Guard-4-12B
+  path: models/llama-guard4-12b
+  max_model_len: 8192
+  gen: {temperature: 0.0, max_tokens: 64}
