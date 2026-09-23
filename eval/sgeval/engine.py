@@ -63,6 +63,17 @@ class VLLMServer:
         return f"http://127.0.0.1:{self.port}/v1"
 
     def start(self):
+        # Port pre-flight: a leftover server from a killed run would answer /health and
+        # silently serve the *previous* model, poisoning this model's results.
+        import urllib.error
+        import urllib.request
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/health", timeout=3):
+                raise RuntimeError(
+                    f"port {self.port} already serves a live vLLM -- a leftover server from "
+                    f"a previous run must be killed first (refusing to reuse it)")
+        except urllib.error.URLError:
+            pass  # nothing listening: good
         vllm_bin = shutil.which("vllm") or shutil.which("vllm.exe")
         if vllm_bin:
             cmd = [vllm_bin, "serve", self.model_path]
@@ -153,18 +164,24 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
             msgs = adapter.messages(s, urls_for(s))
         except Exception as e:  # noqa: BLE001  (e.g. image file missing)
             log.error("input build failed for %s: %s", s["id"], e)
+            # <INPUT_ERROR> is permanent (no retry) and must NOT count toward the
+            # engine-death ratio -- one missing image would otherwise abort the model
             return {"id": s["id"], "gold": s["label"], "pred": None,
-                    "raw": f"<ERROR {e}>"[:400]}
+                    "raw": f"<INPUT_ERROR {e}>"[:400]}
         extra = {"chat_template_kwargs": chat_template_kwargs} if chat_template_kwargs else {}
         for attempt in range(retries):
             try:
-                r = await client.chat.completions.create(
-                    model="guard", messages=msgs, temperature=gen_args.get("temperature", 0.0),
-                    max_tokens=gen_args.get("max_tokens", 256), extra_body=extra)
+                async with sem:   # actually throttle client-side (was previously a no-op)
+                    r = await client.chat.completions.create(
+                        model="guard", messages=msgs, temperature=gen_args.get("temperature", 0.0),
+                        max_tokens=gen_args.get("max_tokens", 256), extra_body=extra)
                 text = r.choices[0].message.content or ""
                 pred = adapter.parse(text)
-                return {"id": s["id"], "gold": s["label"], "pred": pred,
-                        "raw": text[:400]}
+                # store head + tail: the trailing <answer> lands in the tail, so audits can
+                # later tell truncation / provisional-vs-final apart (head-only lost it)
+                raw = text[:300] + ("…" + text[-250:] if len(text) > 550 else text[300:])
+                return {"id": s["id"], "gold": s["label"], "pred": pred, "raw": raw,
+                        "finish_reason": getattr(r.choices[0], "finish_reason", None)}
             except Exception as e:  # noqa: BLE001
                 if attempt == retries - 1:
                     log.error("request failed for %s: %s", s["id"], e)

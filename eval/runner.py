@@ -62,7 +62,10 @@ def append_result(row: dict) -> None:
 
 def eval_dataset(model_key: str, mcfg: dict, ds_key: str, samples: list[dict], args) -> dict:
     adapter = get_adapter(mcfg["adapter"])
-    preds_file = PREDS / f"{model_key}__{ds_key}.jsonl"
+    # debug runs (smoke/limit) use a separate file so they can never pollute or truncate
+    # the canonical predictions used for the final table
+    suffix = ".debug" if (args.smoke or args.limit) else ""
+    preds_file = PREDS / f"{model_key}__{ds_key}{suffix}.jsonl"
     preds_file.parent.mkdir(parents=True, exist_ok=True)
 
     done = set()
@@ -114,9 +117,16 @@ def eval_dataset(model_key: str, mcfg: dict, ds_key: str, samples: list[dict], a
         "dataset": ds_key,
         "engine": args.engine if args.engine != "auto" else mcfg.get("engine", "vllm"),
         "unparsable": unparsable,
+        "n_error": sum(1 for r in all_records if str(r.get("raw", "")).startswith("<ERROR")),
+        "n_input_error": sum(1 for r in all_records
+                             if str(r.get("raw", "")).startswith("<INPUT_ERROR")),
+        "thinking": (mcfg.get("chat_template_kwargs") or {}).get("thinking_type", ""),
+        "max_tokens": (mcfg.get("gen") or {}).get("max_tokens", ""),
+        "limit": args.limit or "",
         "smoke": bool(args.smoke),
         **m,
     }
+    row["n_missing"] = len(samples) - m["n"]
     append_result(row)
     log.info("RESULT %s x %s: F1=%.4f P=%.4f R=%.4f (n=%d, unparsable=%d)",
              model_key, ds_key, m["f1"], m["precision"], m["recall"], m["n"], unparsable)

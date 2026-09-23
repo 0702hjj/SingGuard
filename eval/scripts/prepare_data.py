@@ -65,9 +65,13 @@ def download_raw(hf_id: str, raw_dir: Path, allow_patterns: list[str] | None = N
 
 # ----------------------------------------------------------------- generic helpers
 
+IMAGE_FAILURES: list[str] = []   # names whose image could not be materialized
+
+
 def materialize_image(val, cache: Path, name: str, raw_dir: Path) -> str | None:
     """HF datasets represent images in several ways; turn any of them into a file on disk.
-    Returns path relative to DATA_DIR (or None)."""
+    Returns path relative to DATA_DIR (or None). Failures are counted in IMAGE_FAILURES
+    so manifests can show how many rows silently became text-only."""
     cache.mkdir(parents=True, exist_ok=True)
     try:
         if val in (None, "", []):
@@ -99,6 +103,7 @@ def materialize_image(val, cache: Path, name: str, raw_dir: Path) -> str | None:
         if isinstance(val, (list, tuple)) and val:
             return materialize_image(val[0], cache, name, raw_dir)
     except Exception as e:  # noqa: BLE001
+        IMAGE_FAILURES.append(name)
         print(f"  [warn] image materialization failed for {name}: {e}")
     return None
 
@@ -400,7 +405,8 @@ def stratified_sample(rows: list[dict], n: int, seed: int) -> list[dict]:
     take = {}
     total = len(rows)
     for lbl, group in by_label.items():
-        take[lbl] = min(len(group), round(n * len(group) / total))
+        # proportionally allocate, but never drop a non-empty class to zero
+        take[lbl] = min(len(group), max(1, round(n * len(group) / total)))
     # fix rounding drift toward the largest class
     while sum(take.values()) > n:
         largest = max(by_label, key=lambda l: len(by_label[l]))
@@ -431,7 +437,9 @@ def write_split(rows: list[dict], out_dir: Path, key: str, sample: int, seed: in
                 "label": r["label"],
             }, ensure_ascii=False) + "\n")
     manifest = {"dataset": key, "source_rows": len(rows), "sampled": len(picked),
-                "seed": seed, "n_unsafe": sum(r["label"] for r in picked)}
+                "seed": seed, "n_unsafe": sum(r["label"] for r in picked),
+                "n_with_image": sum(1 for r in picked if r.get("image")),
+                "n_image_failures": len(IMAGE_FAILURES)}
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
     print(f"[ok] {key}: {len(picked)} samples "
           f"({manifest['n_unsafe']} unsafe) -> {out_dir / 'test.jsonl'}")

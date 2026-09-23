@@ -30,9 +30,20 @@ def main() -> int:
         return 1
 
     df = pd.read_csv(results_csv)
+    n_all = len(df)
     if "smoke" in df.columns:  # smoke runs are for pipeline debugging only
         df = df[~df["smoke"].astype(str).str.lower().isin(("true", "1"))]
-    df = df.sort_values("ts").groupby(["model", "dataset"], as_index=False).last()
+    if "limit" in df.columns:  # a --limit debug run must not displace the canonical cell
+        df = df[df["limit"].isna() | (df["limit"].astype(str).str.strip() == "")]
+    # debug backends (hf fallback) rank below the reference vLLM path for the same cell
+    if "engine" in df.columns:
+        df = df.assign(_canon=df["engine"].isin(["vllm", "recompute"]).astype(int))
+        df = df.sort_values(["ts", "_canon"]).groupby(["model", "dataset"], as_index=False).last()
+    else:
+        df = df.sort_values("ts").groupby(["model", "dataset"], as_index=False).last()
+    dropped = n_all - len(df)
+    if dropped:
+        print(f"note: {dropped}/{n_all} result rows excluded (smoke/limit/non-canonical)")
 
     models_yaml = yaml.safe_load((EVAL_DIR / "configs" / "models.yaml").read_text())
     label_of = {k: v.get("label", k) for k, v in models_yaml.items() if isinstance(v, dict)}
@@ -67,8 +78,21 @@ def main() -> int:
         delta = merged[["Model"]].copy()
         for c in PAPER_ORDER:
             delta[c] = (merged[f"{c}_repro"] - merged[f"{c}_paper"]).round(3)
-        delta["Avg"] = (merged["Avg_repro"] - merged["Avg_paper"]).round(3)
+        # Avg must compare like with like: restrict to columns present in BOTH sides
+        # (MMDS-Q/R are absent, so a raw 6-vs-8-column Avg comparison is misleading)
+        both = [c for c in PAPER_ORDER
+                if c in merged.columns and merged[f"{c}_repro"].notna().all()
+                and f"{c}_paper" in merged.columns]
+        if both:
+            avg_r = merged[[f"{c}_repro" for c in both]].mean(axis=1)
+            avg_p = merged[[f"{c}_paper" for c in both]].mean(axis=1)
+            delta[f"Avg({len(both)}/8)"] = (avg_r - avg_p).round(3)
+            delta["_avg_cols"] = len(both)
         print(delta.to_markdown(index=False))
+        if len(both) < 8:
+            print(f"note: Avg Δ computed over the {len(both)} columns present on both sides "
+                  f"({', '.join(both)}); missing vs paper: "
+                  f"{[c for c in PAPER_ORDER if c not in both]}")
 
     missing = [c for c in PAPER_ORDER if c not in repro.columns or repro[c].isna().any()]
     if missing:
