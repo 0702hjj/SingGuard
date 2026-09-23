@@ -165,10 +165,15 @@ def iter_rows(raw_dir: Path):
 # ----------------------------------------------------------------- loaders
 
 def load_vlguard(raw_dir: Path, key: str):
-    """VLGuard test (1,000). Actual HF layout (verified): test.json (flat list with
-    id/image/safe/instr-resp) + test.zip -> extracted at test_extracted/test/<image>.
-    Query = instruction (unsafe items) / safe_instruction (safe items); response kept so the
-    paper's full (query, image, response) triple is judged; label = not safe."""
+    """VLGuard test (1,000), evaluated QUERY-SIDE. Actual HF layout (verified): test.json
+    (flat list with id/image/safe/instr-resp) + test.zip -> test_extracted/test/<image>.
+
+    IMPORTANT: the response is deliberately dropped. VLGuard gold-unsafe items pair a
+    harmful instruction with a *safe refusal* response; SingGuard's documented behavior
+    (model card: "Refusals and safe redirections can be classified as safe") then judges the
+    conversation safe and recall collapses to ~0 (empirically verified). The labels refer to
+    the image+instruction side, so this is a query-side benchmark (paper Sec 4.1: query-side
+    vs response-side benchmarks are evaluated separately)."""
     out = []
     tj = raw_dir / "test.json"
     img_root = raw_dir / "test_extracted" / "test"
@@ -179,11 +184,11 @@ def load_vlguard(raw_dir: Path, key: str):
             q = pair.get("instruction") or pair.get("safe_instruction") or ""
             imgp = img_root / e["image"]
             img = str(imgp.relative_to(DATA_DIR)) if imgp.exists() else None
-            out.append({"image": img, "query": str(q), "response": pair.get("response"),
+            out.append({"image": img, "query": str(q), "response": None,
                         "label": 0 if e.get("safe") else 1, "src": "test.json"})
         n_pos = sum(r["label"] for r in out)
         n_img = sum(1 for r in out if r["image"])
-        print(f"  [note] VLGuard: {n_pos}/{len(out)} unsafe, {n_img} with image")
+        print(f"  [note] VLGuard (query-side): {n_pos}/{len(out)} unsafe, {n_img} with image")
         if not out:
             raise SchemaError("VLGuard: test.json parsed to 0 rows")
         return out

@@ -111,6 +111,7 @@ UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple uv pip install --pytho
 | hybrid 输出的首行是临时判决 | 4.1 节"parse the leading safe/unsafe decision token"按字面实现会取到临时值；真实判决在推理后的 `<answer>` | 解析器 **`<answer>` 优先、首行兜底**。佐证：2.5 节 RL 奖励"decodes the complete valid response"且首个 token 被 mask——计分从来不用首 token |
 | thinking_type 传参方式 | `processor.apply_chat_template(..., thinking_type="fast")` 被**静默忽略**（warning 一行） | 必须走字典参数 `chat_template_kwargs={"thinking_type": ...}`；vLLM 侧是 `extra_body={"chat_template_kwargs": ...}` |
 | 模板文件位置 | guard 提示词在独立 `chat_template.jinja`（tokenizer_config.json 的 chat_template 字段为空，新版惯例） | vLLM 启动显式 `--chat-template`（0.11 实测能自动读，显式更稳） |
+| **VLGuard 必须 query-side 评测** | 数据集 gold-unsafe 项配的是无害拒绝回复；模型卡明示 "Refusals and safe redirections can be classified as safe"，带上回复后整列 recall 塌到 0（实证：8B 0/1000 标记） | VLGuard 判定只喂 (query, image)，不带 response（论文 4.1：query-side 与 response-side 分开评） |
 | vllm 0.29 CLI 参数变更 | `--disable-log-requests` 不存在 → 启动失败 exit 2 | 删掉该 flag（新版本默认不记请求日志） |
 
 ## 4. 数据集真实 schema（论文只给名字，全部要自己摸）
@@ -121,8 +122,15 @@ UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple uv pip install --pytho
 - **VLSBench**：无标签列（全攻击集，6 危害类别）；parquet 版内嵌图像，另有冗余 imgs.tar 勿下
 - **MM-SafetyBench**：`data/<13 主题>/{SD,SD_TYPO,TYPO,Text_only}.parquet`，Text_only 项无图属正常
 
-## 5. 与论文行为的实质差异（复现的核心发现，待全量确认）
+## 5. 与论文行为的实质差异（复现的核心发现）
 
-冒烟证据（管线已逐步实证无误：prompt=官方模板渲染 ✓、图像进入模型 ✓（推理文本能准确描述图像内容）、解析=论文协议 ✓）：
+**已定位并修复的协议差异**：VLGuard 曾因携带 assistant 回复导致整列 recall 塌到 0
+（8B: 0/1000 标记）——该数据集的 gold label 指 query+image 侧，而 gold-unsafe 项配的是
+无害拒绝回复，模型按模型卡明示（"Refusals and safe redirections can be classified as
+safe"）判 safe。改为 query-side 评测后同批样本 F1 0.0 → 0.8685（300 条 A/B 实证，
+precision=1.0）。教训：**评测前先确认每个基准是 query-side 还是 response-side**（论文 4.1
+只给了一句通则，未逐数据集标注）。
 
-- 官方 8B checkpoint 在 fast-slow 模式下对 **"学术包装的有害图像"倾向判 safe**——如 Hitler 图 + "discuss its historical context" 的 query，模型完整走完 7 类规则核查后结论仍是 Safe，而 VLGuard gold=unsafe。若全量确认，VLGuard 列复现值将与论文 0.9511 有实质差距，需在报告中作为 checkpoint 行为差异如实记录（而非管线 bug）。
+**待全量确认的剩余偏差**：query-side 修复后，复现值与论文报告仍可能有余量（如 8B
+VLGuard 论文 0.9511）——baseline 提示词未公开、子采样口径未知、checkpoint 行为差异都是
+来源，报告中需逐列如实记录 Δ。

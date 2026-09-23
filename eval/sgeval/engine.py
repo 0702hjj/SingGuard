@@ -25,6 +25,11 @@ log = logging.getLogger("sgeval")
 
 _HF_CACHE: dict = {}   # model_path -> (processor, model), reused across datasets
 
+
+class ServerDeadError(RuntimeError):
+    """Raised when >50% of a dataset's requests failed with connection errors,
+    meaning the vLLM engine died (e.g. CUDA OOM). The runner aborts this model."""
+
 _MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
          ".webp": "image/webp", ".gif": "image/gif", ".bmp": "image/bmp"}
 
@@ -43,12 +48,13 @@ class VLLMServer:
 
     def __init__(self, model_path: str, port: int = 8199, max_model_len: int = 8192,
                  gpu_memory_utilization: float = 0.90, log_file: str | None = None,
-                 timeout_s: int = 2400):
+                 timeout_s: int = 2400, max_num_seqs: int = 32):
         self.model_path = model_path
         self.port = port
         self.max_model_len = max_model_len
         self.gpu_mem = gpu_memory_utilization
         self.timeout_s = timeout_s
+        self.max_num_seqs = max_num_seqs
         self.log_file = log_file
         self.proc: subprocess.Popen | None = None
 
@@ -69,6 +75,7 @@ class VLLMServer:
             "--dtype", "bfloat16",
             "--max-model-len", str(self.max_model_len),
             "--gpu-memory-utilization", str(self.gpu_mem),
+            "--max-num-seqs", str(self.max_num_seqs),   # cap concurrent seqs: mm-heavy prefill OOMs on shared GPUs
             "--trust-remote-code",
         ]
         # SingGuard-style models ship the guard prompt as a standalone chat_template.jinja
@@ -80,7 +87,10 @@ class VLLMServer:
             cmd += ["--chat-template", str(jinja)]
         log.info("starting vLLM: %s", " ".join(cmd))
         logf = open(self.log_file, "ab") if self.log_file else subprocess.DEVNULL
-        self.proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT)
+        # own process group so stop() can reap the whole tree (vllm renames engine
+        # children to "VLLM::EngineCore", which defeats name-based pkill)
+        self.proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT,
+                                     start_new_session=True)
 
         import urllib.request
         deadline = time.time() + self.timeout_s
@@ -98,11 +108,17 @@ class VLLMServer:
 
     def stop(self):
         if self.proc and self.proc.poll() is None:
-            self.proc.send_signal(signal.SIGTERM)
+            try:
+                os.killpg(self.proc.pid, signal.SIGTERM)   # whole group: api_server + EngineCore children
+            except (ProcessLookupError, PermissionError):
+                self.proc.send_signal(signal.SIGTERM)
             try:
                 self.proc.wait(timeout=60)
             except subprocess.TimeoutExpired:
-                self.proc.kill()
+                try:
+                    os.killpg(self.proc.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    self.proc.kill()
         self.proc = None
 
     def __enter__(self):
@@ -133,7 +149,12 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
     from tqdm.asyncio import tqdm_asyncio
 
     async def one(s: dict) -> dict:
-        msgs = adapter.messages(s, urls_for(s))
+        try:
+            msgs = adapter.messages(s, urls_for(s))
+        except Exception as e:  # noqa: BLE001  (e.g. image file missing)
+            log.error("input build failed for %s: %s", s["id"], e)
+            return {"id": s["id"], "gold": s["label"], "pred": None,
+                    "raw": f"<ERROR {e}>"[:400]}
         extra = {"chat_template_kwargs": chat_template_kwargs} if chat_template_kwargs else {}
         for attempt in range(retries):
             try:
@@ -152,7 +173,8 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
                 await asyncio.sleep(3 * (attempt + 1))
 
     tasks = [one(s) for s in samples]
-    return await tqdm_asyncio.gather(*tasks, desc=progress_desc)
+    records = await tqdm_asyncio.gather(*tasks, desc=progress_desc)
+    return records
 
 
 def run_dataset_hf(model_path: str, samples: list[dict], adapter, gen_args: dict,

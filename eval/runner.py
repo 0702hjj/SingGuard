@@ -30,8 +30,8 @@ EVAL_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(EVAL_DIR))
 
 from sgeval.adapters import get_adapter
-from sgeval.engine import (VLLMServer, finalize_records, run_dataset_hf,
-                           run_dataset_vllm)
+from sgeval.engine import (ServerDeadError, VLLMServer, finalize_records,
+                           run_dataset_hf, run_dataset_vllm)
 from sgeval.metrics import prf
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -67,7 +67,9 @@ def eval_dataset(model_key: str, mcfg: dict, ds_key: str, samples: list[dict], a
 
     done = set()
     if preds_file.exists() and not args.no_resume:
-        done = {json.loads(l)["id"] for l in preds_file.open() if l.strip()}
+        # only real completions count: request failures (<ERROR ...) must be retried
+        done = {json.loads(l)["id"] for l in preds_file.open()
+                if l.strip() and not json.loads(l).get("raw", "").startswith("<ERROR")}
         log.info("resume: %d/%d already done for %s x %s", len(done), len(samples),
                  model_key, ds_key)
     todo = [s for s in samples if s["id"] not in done]
@@ -87,8 +89,22 @@ def eval_dataset(model_key: str, mcfg: dict, ds_key: str, samples: list[dict], a
         with preds_file.open("a") as f:
             for r in records:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        # engine-death check AFTER persisting: partial good work must survive so the
+        # rerun resumes around it instead of redoing everything
+        n_err = sum(1 for r in records if str(r.get("raw", "")).startswith("<ERROR"))
+        if records and n_err / len(records) > 0.5:
+            raise ServerDeadError(
+                f"{n_err}/{len(records)} requests failed this pass "
+                f"(engine died mid-dataset); see the vLLM log")
 
-    all_records = read_jsonl(preds_file)
+    # dedupe by id (retried samples append a second record; last wins) and drop
+    # records from ids outside the current sample set (e.g. re-normalized dataset)
+    by_id = {r["id"]: r for r in read_jsonl(preds_file)}
+    valid_ids = {s["id"] for s in samples}
+    all_records = [r for i, r in by_id.items() if i in valid_ids]
+    with preds_file.open("w") as f:
+        for r in all_records:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
     golds, preds, unparsable = finalize_records(all_records)
     m = prf(golds, preds)
     row = {
@@ -116,7 +132,9 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=None, help="override per-dataset sample cap")
     ap.add_argument("--smoke", type=int, default=0,
                     help="debug: only first N samples per dataset (still recorded as .smoke)")
-    ap.add_argument("--concurrency", type=int, default=32)
+    ap.add_argument("--concurrency", type=int, default=16)
+    ap.add_argument("--max-seqs", type=int, default=32,
+                    help="vLLM --max-num-seqs; caps engine-side concurrency (OOM guard)")
     ap.add_argument("--batch-size", type=int, default=4, help="hf backend batch size")
     ap.add_argument("--port", type=int, default=8199)
     ap.add_argument("--gpu-util", type=float, default=None,
@@ -176,6 +194,7 @@ def main() -> int:
                 max_model_len=mcfg.get("max_model_len", 8192),
                 gpu_memory_utilization=(args.gpu_util if args.gpu_util is not None
                                         else mcfg.get("gpu_memory_utilization", 0.90)),
+                max_num_seqs=args.max_seqs,
                 log_file=str(LOGS / f"vllm_{mk}.log"))
             try:
                 server.start()
@@ -210,6 +229,15 @@ def main() -> int:
                 if server:
                     server.stop()
                 return 130
+            except ServerDeadError as e:
+                # engine died (CUDA OOM etc.): continuing would only log connection
+                # errors for every remaining dataset -- abort this model, free the GPU.
+                log.error("ABORT model %s: %s", mk, e)
+                rc = 1
+                if server:
+                    server.stop()
+                    args._server = None
+                break
             except Exception as e:  # noqa: BLE001
                 log.error("%s x %s failed: %s", mk, dk, e)
                 rc = 1
