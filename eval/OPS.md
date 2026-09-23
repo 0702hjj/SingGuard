@@ -120,7 +120,24 @@ UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple uv pip install --pytho
 - **BeaverTails-V**：`is_response_safe` 列是 **yes/no 字符串**（不是布尔），按每类别 `data/<category>/train.parquet` 组织
 - **SPA-VL**：test 拆成 `harm-*.parquet` / `help-*.parquet`，标签在文件名里；1.3GB train.zip 不需要
 - **VLSBench**：无标签列（全攻击集，6 危害类别）；parquet 版内嵌图像，另有冗余 imgs.tar 勿下
-- **MM-SafetyBench**：`data/<13 主题>/{SD,SD_TYPO,TYPO,Text_only}.parquet`，Text_only 项无图属正常
+- **MM-SafetyBench**：`data/<13 主题>/{SD,SD_TYPO,TYPO,Text_only}.parquet`。论文规模 5,040 = 13 主题 x 3 图像变体 x ~129 —— **Text_only 是对照消融变体，论文未用**，loader 须排除（旧版误含 242 条）
+- **SPA-VL**：HF test config = harm(265, unsafe) + help(265, safe)；论文标 7,530 = 上述 530 + validation(7,000)，而 validation 是 chosen/rejected 偏好对、**无二分类标签**。我们评测官方 test config，口径差异已记录
+
+## 4b. 数据集规模口径对照（论文 vs 本仓库）
+
+| 数据集 | 论文规模 | 我们的池子 | 采样 | 说明 |
+|---|---|---|---|---|
+| VLGuard | 1,000 | 1,000 | 全量 | query-side（见上）|
+| JailBreakV | 28,000 | 28,000（图像仅 ~360 可用） | 1,000 | 官方图像大部分在 Google Drive，未公开镜像 |
+| SPA-VL | 7,530 | 530（官方 test config） | 全量 | 7,000 validation 无标签 |
+| VLSBench | 2,241 | 2,240 | 1,000 | |
+| MM-Safety | 5,040 | 5,040（图像变体） | 1,000 | 已排除 Text_only |
+| BeaverTails-V | 1,180 | 1,180 | 1,000 | response-side |
+
+## 4c. 解码口径
+
+- README 全部示例用 `do_sample=False`（greedy），我们采用 greedy；
+- 模型自带 `generation_config.json` 却推荐采样（temperature 0.7 / top_p 0.8 / top_k 20）——论文未说明评测用哪种，偏差已记录。
 
 ## 5. 与论文行为的实质差异（复现的核心发现）
 

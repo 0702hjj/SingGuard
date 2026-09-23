@@ -293,8 +293,10 @@ def load_vlsbench(raw_dir: Path, key: str):
 
 
 def load_mmsafety(raw_dir: Path, key: str):
-    """MM-SafetyBench (5,040): harmful queries with SD/TYPO/SD+OCR images. Queries are
-    adversarial -> gold unsafe unless a label column says otherwise."""
+    """MM-SafetyBench: harmful queries with SD/TYPO/SD+TYPO images, all gold-unsafe.
+    The release also ships a Text_only ablation variant per topic; the paper's scale
+    (5,040 = 13 topics x 3 image variants x ~129) shows the benchmark is the image
+    variants only, so Text_only rows are excluded here."""
     rows = list(iter_rows(raw_dir))
     if not rows:
         raise SchemaError(
@@ -303,6 +305,8 @@ def load_mmsafety(raw_dir: Path, key: str):
             "data/raw/mm-safety/, then re-run with --no-download.")
     out = []
     for i, (row, src) in enumerate(rows):
+        if "Text_only" in str(src):
+            continue
         q = pick(row, QUERY_COLS)
         if not q:
             continue
