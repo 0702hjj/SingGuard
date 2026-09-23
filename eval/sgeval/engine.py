@@ -176,7 +176,7 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
                         model="guard", messages=msgs, temperature=gen_args.get("temperature", 0.0),
                         max_tokens=gen_args.get("max_tokens", 256), extra_body=extra)
                 text = r.choices[0].message.content or ""
-                pred = adapter.parse(text)
+                pred = adapter.parse(text, sample=s)
                 # store head + tail: the trailing <answer> lands in the tail, so audits can
                 # later tell truncation / provisional-vs-final apart (head-only lost it)
                 raw = text[:300] + ("…" + text[-250:] if len(text) > 550 else text[300:])
@@ -255,7 +255,8 @@ def run_dataset_hf(model_path: str, samples: list[dict], adapter, gen_args: dict
             trimmed = [o[len(inp):] for inp, o in zip(inputs.input_ids, gen)]
             texts = processor.batch_decode(trimmed, skip_special_tokens=True)
             for s, t in zip(batch, texts):
-                out.append({"id": s["id"], "gold": s["label"], "pred": adapter.parse(t),
+                out.append({"id": s["id"], "gold": s["label"],
+                            "pred": adapter.parse(t, sample=s),
                             "raw": t[:400]})
             order.extend(s["id"] for s in batch)
 

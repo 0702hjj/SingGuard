@@ -88,10 +88,20 @@ llavaguard-7b:
   <<: *defaults
   label: LlavaGuard
   adapter: llavaguard
-  hf_id: AIML-Toulouse/LlavaGuard-7b
+  hf_id: AIML-TUDA/LlavaGuard-v1.1-7B-hf   # correct author id; paper does not specify the version
   path: models/llavaguard-7b
   max_model_len: 4096                           # LLaVA-1.5 context limit
   gen: {temperature: 0.0, max_tokens: 256}
+
+
+llavashield-v1-7b:
+  <<: *defaults
+  label: LLaVAShield
+  adapter: llavashield
+  hf_id: RealSafe/LLaVAShield-v1.0-7B   # exact version named in the paper (Table 10)
+  path: models/llavashield-v1-7b
+  max_model_len: 16384                  # model card: 16K context
+  gen: {temperature: 0.0, max_tokens: 512}
 
 # ---------------------------------------------------------------- optional rows
 # Available in the registry but not run by default. Fill path/ids and move into the enabled set

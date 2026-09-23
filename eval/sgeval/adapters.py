@@ -9,6 +9,8 @@ paper protocol: leading safe/unsafe token, failures scored as incorrect.
 """
 from __future__ import annotations
 
+import re
+
 from .parsing import parse_decision
 
 # The moderation instruction used for general-purpose VLM baselines (Qwen3-VL rows).
@@ -41,7 +43,7 @@ class Adapter:
     def messages(self, s: dict, image_urls: list[str]) -> list[dict]:
         raise NotImplementedError
 
-    def parse(self, output: str) -> int | None:
+    def parse(self, output: str, sample: dict | None = None) -> int | None:
         return parse_decision(output, where=self.parse_where)
 
 
@@ -187,6 +189,83 @@ class LlamaGuardClassicAdapter(Adapter):
         return [{"role": "user", "content": _content(image_urls, text)}]
 
 
+class LLaVAShieldAdapter(Adapter):
+    """LLaVAShield-v1.0-7B (RealSafe/LLaVAShield-v1.0-7B; LLaVA-OneVision-7B + MMDS SFT).
+
+    Uses the model's official prompt assembly (vendored from github.com/leost123456/LLaVAShield).
+    Output is a JSON block inside <OUTPUT> carrying "user_rating" and "assistant_rating" --
+    which mirrors the paper's MMDS-Q (user side) / MMDS-R (assistant side) split. We take the
+    assistant rating when the sample carries a response, else the user rating.
+
+    Deviation (documented): the reference feeds the image inline at its "<image>" marker inside
+    the dialogue JSON; the OpenAI-style API places images at the message start, so the marker is
+    rendered as "[image]" (avoids duplicating the special image token).
+    """
+
+    name = "llavashield"
+
+    _DEFAULT_POLICY = ["Violence & Harm", "Hate & Harassment", "Sexual Content",
+                       "Self-Harm & Suicide", "Illegal Activities",
+                       "Deception & Misinformation", "Privacy Violation",
+                       "Malicious Disruption"]
+
+    def _prompt(self, s: dict, has_image: bool) -> str:
+        import json as _json
+
+        from .vendor import policy as _policy
+        from .vendor import prompt_template as _T
+
+        pol = self._DEFAULT_POLICY
+        user_text = s["query"]
+        if has_image:
+            user_text = f"Image1: [image]; {user_text}"
+        conv = [{"role": "user", "content": user_text}]
+        if s.get("response"):
+            conv.append({"role": "assistant", "content": s["response"]})
+        return (
+            _T.llava_prefix_prompt + "\n" + _T.llava_task_prompt + "\n" + _T.llava_note_prompt
+            + "\n**Policy Dimensions**:\n" + _policy.policy_prompt_construct(pol) + "\n"
+            + _T.llava_input_parameter_prompt + "\n"
+            + _T.llava_output_format_prompt.format(
+                usage_policy=_policy.usage_policy_prompt(pol)) + "\n"
+            + _T.llava_dialogue_history_prompt.format(
+                conversations=_json.dumps(conv, ensure_ascii=False))
+        )
+
+    def messages(self, s, image_urls):
+        prompt = self._prompt(s, has_image=bool(image_urls))
+        return [{"role": "user", "content": _content(image_urls, prompt)}]
+
+    @staticmethod
+    def _rating(data: dict, key: str) -> int | None:
+        v = data.get(key)
+        if v is None:
+            return None
+        v = str(v).strip().strip('"').strip().lower()
+        if v in ("", "null", "none"):
+            return None
+        return 0 if v.startswith("safe") else 1
+
+    def parse(self, output: str, sample: dict | None = None) -> int | None:
+        import json as _json
+
+        m = re.search(r"<OUTPUT>(.*?)</OUTPUT>", output or "", re.DOTALL)
+        block = m.group(1) if m else (output or "")
+        mm = re.search(r"\{.*\}", block, re.DOTALL)
+        if mm:
+            try:
+                data = _json.loads(mm.group(0))
+            except (ValueError, _json.JSONDecodeError):
+                data = None
+            if isinstance(data, dict):
+                asst = self._rating(data, "assistant_rating")
+                user = self._rating(data, "user_rating")
+                if sample is not None and sample.get("response"):
+                    return asst if asst is not None else user
+                return user if user is not None else asst
+        return parse_decision(output, where="first_line")
+
+
 ADAPTERS = {
     SingGuardAdapter.name: SingGuardAdapter,
     GenericVLMGuardAdapter.name: GenericVLMGuardAdapter,
@@ -194,6 +273,7 @@ ADAPTERS = {
     LlavaGuardAdapter.name: LlavaGuardAdapter,
     ShieldGemma2Adapter.name: ShieldGemma2Adapter,
     LlamaGuardClassicAdapter.name: LlamaGuardClassicAdapter,
+    LLaVAShieldAdapter.name: LLaVAShieldAdapter,
 }
 
 
