@@ -53,8 +53,8 @@ def main() -> int:
             continue
         valid_ids = {json.loads(l)["id"] for l in jf.open() if l.strip()}
         by_id = {r["id"]: r for r in (json.loads(l) for l in f.open() if l.strip())}
-        records = [r for i, r in by_id.items()
-                   if i in valid_ids and not str(r.get("raw", "")).startswith("<ERROR")]
+        # mirror runner semantics: <ERROR/> records are kept and scored as incorrect
+        records = [r for i, r in by_id.items() if i in valid_ids]
         if not records:
             continue
         golds, preds, unparsable = finalize_records(records)
