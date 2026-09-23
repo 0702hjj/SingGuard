@@ -355,28 +355,62 @@ def load_beavertailsv(raw_dir: Path, key: str):
 
 
 def load_mmds(raw_dir: Path, key: str):
-    """MMDS: manual placement. Put a normalized CSV at data/raw/mmds/mmds_normalized.csv with
-    columns: query, image_path, response, label, side  (side in {q, r}). Emits BOTH
-    data/mmds-q/ and data/mmds-r/ test sets; image_path is relative to data/raw/mmds/."""
-    src = raw_dir / "mmds_normalized.csv"
-    if not src.exists():
-        print(f"[mmds] {src} not found -- MMDS-Q / MMDS-R columns will be skipped.\n"
-              "       Get MMDS from the LLaVAShield project (https://leost123456.github.io),\n"
-              "       normalize it into that CSV, then re-run prepare_data.py --datasets mmds-q,mmds-r")
+    """MMDS (leost233/MMDS): 4,484 multimodal multi-turn dialogues with per-role ratings.
+    user_rating -> MMDS-Q (query side); assistant_rating -> MMDS-R (response side) -- the
+    paper's explicit split so "intent and assistance are scored separately".
+
+    Mapping to our (query, image, response) triple: query = the dialogue context (all turns
+    except the final assistant turn, labelled [user]:/[assistant]:); images = every image
+    referenced by the dialogue, in order; response = the final assistant turn (R side only).
+    Rows whose rating for the scored side is "null" are skipped (role absent)."""
+    import zipfile
+
+    jf = raw_dir / "mmds.jsonl"
+    if not jf.exists():
+        print(f"[mmds] {jf} not found -- MMDS-Q / MMDS-R columns will be skipped.\n"
+              "       MMDS is public: hf dataset leost233/MMDS (mmds.jsonl + images.zip)")
         return {}
-    df = pd.read_csv(src).fillna("")
+    if not (raw_dir / "images").exists():
+        zf = raw_dir / "images.zip"
+        if not zf.exists():
+            raise SchemaError("MMDS: images.zip missing (re-run with download enabled)")
+        with zipfile.ZipFile(zf) as z:
+            z.extractall(raw_dir)
+
+    def img_list(turn: dict) -> list[str]:
+        v = turn.get("image")
+        if isinstance(v, list):
+            return [str(x) for x in v]
+        if isinstance(v, str) and v.strip():
+            try:
+                v2 = json.loads(v)
+            except ValueError:
+                v2 = [v]
+            return [str(x) for x in (v2 if isinstance(v2, list) else [v2])]
+        return []
+
     by_side: dict[str, list] = {"q": [], "r": []}
-    for i, row in df.iterrows():
-        side = str(row.get("side", "q")).lower().strip()
-        if side not in by_side:
+    for rec in (json.loads(l) for l in jf.open() if l.strip()):
+        conv = rec.get("conversations") or []
+        if not conv:
             continue
-        img = None
-        if str(row.get("image_path", "")):
-            cand = raw_dir / str(row["image_path"])
-            img = str(cand.relative_to(DATA_DIR)) if cand.exists() else None
-        by_side[side].append({"image": img, "query": str(row.get("query", "")),
-                              "response": str(row["response"]) if str(row.get("response", "")) else None,
-                              "label": parse_label(row["label"]), "src": "mmds_manual"})
+        imgs = []
+        for t in conv:
+            for p in img_list(t):
+                cand = raw_dir / p
+                if cand.exists():
+                    imgs.append(str(cand.relative_to(DATA_DIR)))
+        last_asst = conv[-1].get("content") if conv[-1].get("role") == "assistant" else None
+        ctx_turns = conv[:-1] if last_asst is not None else conv
+        context = "\n".join(f'[{t["role"]}]: {t.get("content", "")}'.strip() for t in ctx_turns)
+        base = {"image": imgs or None, "query": context, "src": f"mmds:{rec.get('id')}"}
+        if rec.get("user_rating") in ("Safe", "Unsafe"):
+            by_side["q"].append({**base, "response": None,
+                                 "label": 0 if rec["user_rating"] == "Safe" else 1})
+        if last_asst and rec.get("assistant_rating") in ("Safe", "Unsafe"):
+            by_side["r"].append({**base, "response": str(last_asst),
+                                 "label": 0 if rec["assistant_rating"] == "Safe" else 1})
+    print(f"  [note] MMDS: Q pool={len(by_side['q'])} R pool={len(by_side['r'])}")
     return {"q": by_side["q"], "r": by_side["r"]}
 
 
@@ -470,8 +504,7 @@ def main() -> int:
         seed = args.seed if args.seed is not None else c.get("seed", 42)
         raw_dir = DATA_DIR / "raw" / k
         if c.get("loader") == "mmds":
-            if not args.no_download:
-                pass  # manual dataset; nothing to fetch
+            raw_dir = DATA_DIR / "raw" / "mmds"   # both mmds-q and mmds-r share one raw tree
             sides = load_mmds(raw_dir, k) or {}
             if "q" in sides:
                 write_split(sides["q"], DATA_DIR / "mmds-q", "mmds-q", sample, seed, "mmdsq")

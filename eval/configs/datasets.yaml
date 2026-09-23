@@ -52,19 +52,17 @@ beavertails-v:
   hf_id: PKU-Alignment/BeaverTails-V
   loader: beavertailsv
 
-# MMDS comes from the LLaVAShield project (https://leost123456.github.io, Huang et al. 2025).
-# No stable public mirror confirmed; place a normalized file at
-#   data/raw/mmds/mmds_normalized.csv   (columns: query,image_path,response,label,side)
-# with side in {q, r}; the loader then emits both data/mmds-q/ and data/mmds-r/.
-# Until then these two columns are skipped gracefully.
+# MMDS (Huang et al. 2025) is public since 2026-03: hf dataset leost233/MMDS
+# (mmds.jsonl + images.zip). Per-role ratings split into MMDS-Q (user side) and
+# MMDS-R (assistant side); the loader emits both test sets from one run.
 mmds-q:
   <<: *defaults
   label: MMDS-Q
+  hf_id: leost233/MMDS
   loader: mmds
-  manual: true
 
 mmds-r:
   <<: *defaults
   label: MMDS-R
+  hf_id: leost233/MMDS
   loader: mmds
-  manual: true

@@ -150,11 +150,13 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
 
     def urls_for(s: dict) -> list[str]:
         urls = []
-        for key in ("image",):
-            if s.get(key):
-                if s[key] not in url_cache:
-                    url_cache[s[key]] = image_to_data_url(str(data_dir / s[key]))
-                urls.append(url_cache[s[key]])
+        v = s.get("image")
+        if isinstance(v, str):
+            v = [v] if v else []
+        for rel in (v or []):            # a sample may carry several images (e.g. MMDS)
+            if rel not in url_cache:
+                url_cache[rel] = image_to_data_url(str(data_dir / rel))
+            urls.append(url_cache[rel])
         return urls
 
     from tqdm.asyncio import tqdm_asyncio

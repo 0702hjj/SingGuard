@@ -38,6 +38,11 @@ RULES = {
                           min_image_frac=1.0),
     "vlguard-q":     dict(expect_image=True,  forbid_response=True,  require_response=False,
                           min_image_frac=0.95),
+    # MMDS mixes image-bearing and text-only dialogues (~9% carry no image)
+    "mmds-q":        dict(expect_image=True,  forbid_response=True,  require_response=False,
+                          min_image_frac=0.85),
+    "mmds-r":        dict(expect_image=True,  forbid_response=False, require_response=True,
+                          min_image_frac=0.85),
 }
 
 
@@ -46,8 +51,11 @@ def check(key: str, jf: Path, rules: dict) -> list[str]:
     rows = [json.loads(l) for l in jf.open() if l.strip()]
     if not rows:
         return [f"{key}: empty file {jf}"]
+    def has_img(r):
+        v = r.get("image")
+        return bool(v) if isinstance(v, list) else bool(v)
     n = len(rows)
-    n_img = sum(1 for r in rows if r.get("image"))
+    n_img = sum(1 for r in rows if has_img(r))
     n_resp = sum(1 for r in rows if r.get("response"))
     n_pos = sum(1 for r in rows if r.get("label") == 1)
 
@@ -70,8 +78,9 @@ def check(key: str, jf: Path, rules: dict) -> list[str]:
     # image file existence
     missing = 0
     for r in rows:
-        if r.get("image"):
-            p = Path(r["image"])
+        v = r.get("image")
+        for ip in (v if isinstance(v, list) else [v] if v else []):
+            p = Path(ip)
             if not p.is_absolute():
                 p = EVAL_DIR / "data" / p
             if not p.exists():
