@@ -35,7 +35,7 @@ wc -l results/preds/*.jsonl                   # 每个模型×数据集已完成
 cat results/results.csv | column -t -s,       # 已有指标
 
 # 换推理模式 / 输出长度（调试用）
-... --thinking slow --max-tokens 1024          # slow 模式
+... --thinking fast --max-tokens 1024          # fast 模式（模板只实现了 fast/fast-slow；`slow` 会被静默渲染成 fast，已禁）
 ... --engine hf                                # transformers 后端（慢，作对照）
 ... --gpu-util 0.60                            # 共享卡时降低显存占用
 ```
@@ -112,6 +112,9 @@ UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple uv pip install --pytho
 | thinking_type 传参方式 | `processor.apply_chat_template(..., thinking_type="fast")` 被**静默忽略**（warning 一行） | 必须走字典参数 `chat_template_kwargs={"thinking_type": ...}`；vLLM 侧是 `extra_body={"chat_template_kwargs": ...}` |
 | 模板文件位置 | guard 提示词在独立 `chat_template.jinja`（tokenizer_config.json 的 chat_template 字段为空，新版惯例） | vLLM 启动显式 `--chat-template`（0.11 实测能自动读，显式更稳） |
 | **VLGuard 必须 query-side 评测** | 数据集 gold-unsafe 项配的是无害拒绝回复；模型卡明示 "Refusals and safe redirections can be classified as safe"，带上回复后整列 recall 塌到 0（实证：8B 0/1000 标记） | VLGuard 判定只喂 (query, image)，不带 response（论文 4.1：query-side 与 response-side 分开评） |
+| **`thinking_type=slow` 是假模式** | 模板只判断 `== 'fast-slow'`，其余值（含 slow、拼写错误）都落到 fast 格式块——`<thinking_type>slow</thinking_type>` 配 fast 提示词，训练分布外 | runner 的 `--thinking` 限定为 fast/fast-slow；OPS 命令已修正 |
+| **评测协议：首 token 才是判决** | 论文 4.1 原文 "parse the leading safe/unsafe decision token"，`<answer>` 仅用于归因；实测（用已存 raw 重算）首 token 与我们旧口径在 99.7% 记录一致且各列 ≥，个别列 +0.10 | 解析器已改为**首 token 优先、`<answer>` 兜底**，并容忍 code fence（基线常把判决包在 ``` 里）|
+| **8192 上下文 → 13 条大图样本确定性 400** | beavertails-v 有 13 张图 >8175 visual token（preprocessor 与官方 Qwen3-VL 一致、不降采样；模型自身上限 262144），5 个模型上全部 HTTP 400 被计错（~1.3%/列）| `max_model_len` 提到 32768（KV 仅 144KB/token，成本可忽略）|
 | vllm 0.29 CLI 参数变更 | `--disable-log-requests` 不存在 → 启动失败 exit 2 | 删掉该 flag（新版本默认不记请求日志） |
 
 ## 4. 数据集真实 schema（论文只给名字，全部要自己摸）
@@ -147,6 +150,14 @@ UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple uv pip install --pytho
 safe"）判 safe。改为 query-side 评测后同批样本 F1 0.0 → 0.8685（300 条 A/B 实证，
 precision=1.0）。教训：**评测前先确认每个基准是 query-side 还是 response-side**（论文 4.1
 只给了一句通则，未逐数据集标注）。
+
+**已定性的核心差异（发布权重 vs 论文数字）**：论文 4.2 自己承认 JailBreakV/VLSBench/MM-Safety
+三列 "saturated by guards that specifically train on jailbreak templates"——论文这些列的 0.88~0.99
+要求模型近乎全判 unsafe（全 unsafe 集下 F1=2R/(1+R)，LLaVAShield 0.9939 ⇒ R≈0.99）。实测发布权重：
+8B 是审慎的 policy judge（对白底黑字 "Crohn's disease" 图 + 正当医疗问题判 safe、VLSBench R=0.525），
+2B 反而近乎全喊 unsafe（VLSBench R=0.988、SPA-VL R=0.9925）；**两个尺寸都不匹配论文数字**，而论文
+Table 12 显示模式/配置差异只值 ~1 个点。→ 结论：Table 4 的绝对值不可用发布权重复现，复现应报告
+排序/趋势 + 逐列 Δ，并注明该差异来源（refusal-template 敏感度 vs policy-grounded 判定）。
 
 **待全量确认的剩余偏差**：query-side 修复后，复现值与论文报告仍可能有余量（如 8B
 VLGuard 论文 0.9511）——baseline 提示词未公开、子采样口径未知、checkpoint 行为差异都是

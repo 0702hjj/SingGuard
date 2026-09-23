@@ -27,7 +27,7 @@ sing-guard-2b:
   ms_id: inclusionAI/Sing-Guard-2b
   hf_id: inclusionAI/Sing-Guard-2b
   path: models/sing-guard-2b
-  max_model_len: 8192
+  max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 1024}
   chat_template_kwargs: {thinking_type: fast-slow}  # README canonical example is hybrid-format; fast mode misclassifies the official bomb example
 
@@ -38,7 +38,7 @@ sing-guard-4b:
   ms_id: inclusionAI/Sing-Guard-4b
   hf_id: inclusionAI/Sing-Guard-4b
   path: models/sing-guard-4b
-  max_model_len: 8192
+  max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 1024}
   chat_template_kwargs: {thinking_type: fast-slow}
 
@@ -49,7 +49,7 @@ sing-guard-8b:
   ms_id: inclusionAI/Sing-Guard-8b
   hf_id: inclusionAI/Sing-Guard-8b
   path: models/sing-guard-8b
-  max_model_len: 8192
+  max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 1024}
   chat_template_kwargs: {thinking_type: fast-slow}
 
@@ -60,7 +60,7 @@ qwen3-vl-4b:
   ms_id: Qwen/Qwen3-VL-4B-Instruct
   hf_id: Qwen/Qwen3-VL-4B-Instruct
   path: models/qwen3-vl-4b
-  max_model_len: 8192
+  max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 512}
   chat_template_kwargs: {enable_thinking: false}
 
@@ -71,7 +71,7 @@ qwen3-vl-8b:
   ms_id: Qwen/Qwen3-VL-8B-Instruct
   hf_id: Qwen/Qwen3-VL-8B-Instruct
   path: models/qwen3-vl-8b
-  max_model_len: 8192
+  max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 512}
   chat_template_kwargs: {enable_thinking: false}
 
@@ -81,7 +81,7 @@ guardreasoner-vl-7b:
   adapter: guardreasoner
   hf_id: yueliu1999/GuardReasoner-VL-7B
   path: models/guardreasoner-vl-7b
-  max_model_len: 8192
+  max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 512}      # reasoning model: longer output, parse the final verdict
 
 llavaguard-7b:
@@ -104,7 +104,7 @@ safeguard-vl:
   adapter: generic_vlm_guard
   hf_id: TBD   # Piao et al. 2026 checkpoint id - verify before enabling
   path: models/safeguard-vl
-  max_model_len: 8192
+  max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 512}
 
 shieldgemma-2-4b:
@@ -114,7 +114,7 @@ shieldgemma-2-4b:
   adapter: shieldgemma2
   hf_id: google/shieldgemma-2-4b-it
   path: models/shieldgemma-2-4b
-  max_model_len: 8192
+  max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 64}
 
 llama-guard3-vision-11b:
@@ -125,7 +125,7 @@ llama-guard3-vision-11b:
   adapter: llamaclassic
   hf_id: meta-llama/Llama-Guard-3-11B-Vision
   path: models/llama-guard3-vision-11b
-  max_model_len: 8192
+  max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 64}
 
 llama-guard4-12b:
@@ -135,5 +135,5 @@ llama-guard4-12b:
   adapter: llamaclassic
   hf_id: meta-llama/Llama-Guard-4-12B
   path: models/llama-guard4-12b
-  max_model_len: 8192
+  max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 64}

@@ -150,8 +150,11 @@ def main() -> int:
     ap.add_argument("--gpu-util", type=float, default=None,
                     help="override gpu_memory_utilization (use ~0.6 on a shared GPU)")
     ap.add_argument("--max-tokens", type=int, default=None, help="override gen.max_tokens")
-    ap.add_argument("--thinking", default=None,
-                    help="override chat_template_kwargs.thinking_type (fast|fast-slow|slow)")
+    ap.add_argument("--thinking", choices=["fast", "fast-slow"], default=None,
+                    help="override chat_template_kwargs.thinking_type. NOTE: the released "
+                         "template only defines formats for 'fast' and 'fast-slow'; any other "
+                         "value (e.g. 'slow') silently renders the FAST prompt while declaring "
+                         "the other mode, so it is rejected here")
     ap.add_argument("--no-resume", action="store_true")
     args = ap.parse_args()
     args._server = None
