@@ -68,11 +68,29 @@ def eval_dataset(model_key: str, mcfg: dict, ds_key: str, samples: list[dict], a
     preds_file = PREDS / f"{model_key}__{ds_key}{suffix}.jsonl"
     preds_file.parent.mkdir(parents=True, exist_ok=True)
 
+    from sgeval.engine import _cfg_tag
+    cur_cfg = _cfg_tag(adapter, mcfg.get("gen", {}), mcfg.get("chat_template_kwargs") or {})
+
+    def _resumable(rec: dict) -> bool:
+        # a completion counts only if it was produced under the CURRENT configuration and
+        # is not a transport failure
+        return (not str(rec.get("raw", "")).startswith("<ERROR")
+                and rec.get("cfg") == cur_cfg)
+
     done = set()
     if preds_file.exists() and not args.no_resume:
-        # only real completions count: request failures (<ERROR ...) must be retried
-        done = {json.loads(l)["id"] for l in preds_file.open()
-                if l.strip() and not json.loads(l).get("raw", "").startswith("<ERROR")}
+        n_other = 0
+        for l in preds_file.open():
+            if not l.strip():
+                continue
+            rec = json.loads(l)
+            if _resumable(rec):
+                done.add(rec["id"])
+            elif "cfg" in rec or not str(rec.get("raw", "")).startswith("<ERROR"):
+                n_other += 1
+        if n_other:
+            log.info("resume: %d record(s) from a different config will be REDONE "
+                     "(cfg mismatch)", n_other)
         log.info("resume: %d/%d already done for %s x %s", len(done), len(samples),
                  model_key, ds_key)
     todo = [s for s in samples if s["id"] not in done]

@@ -26,6 +26,14 @@ log = logging.getLogger("sgeval")
 _HF_CACHE: dict = {}   # model_path -> (processor, model), reused across datasets
 
 
+def _cfg_tag(adapter, gen_args: dict, chat_template_kwargs: dict) -> str:
+    """Fingerprint of the inference configuration a record was produced under. Resume logic
+    compares this so predictions from a different mode/max_tokens are never silently reused
+    (a real incident: fast-slow predictions were re-labelled as fast-mode results)."""
+    mode = (chat_template_kwargs or {}).get("thinking_type", "")
+    return f"{getattr(adapter, 'name', 'adapter')}|{mode}|{gen_args.get('max_tokens', '')}"
+
+
 class ServerDeadError(RuntimeError):
     """Raised when >50% of a dataset's requests failed with connection errors,
     meaning the vLLM engine died (e.g. CUDA OOM). The runner aborts this model."""
@@ -169,7 +177,8 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
             # <INPUT_ERROR> is permanent (no retry) and must NOT count toward the
             # engine-death ratio -- one missing image would otherwise abort the model
             return {"id": s["id"], "gold": s["label"], "pred": None,
-                    "raw": f"<INPUT_ERROR {e}>"[:400]}
+                    "raw": f"<INPUT_ERROR {e}>"[:400],
+                    "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs)}
         extra = {"chat_template_kwargs": chat_template_kwargs} if chat_template_kwargs else {}
         for attempt in range(retries):
             try:
@@ -183,12 +192,14 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
                 # later tell truncation / provisional-vs-final apart (head-only lost it)
                 raw = text[:300] + ("…" + text[-250:] if len(text) > 550 else text[300:])
                 return {"id": s["id"], "gold": s["label"], "pred": pred, "raw": raw,
+                        "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs),
                         "finish_reason": getattr(r.choices[0], "finish_reason", None)}
             except Exception as e:  # noqa: BLE001
                 if attempt == retries - 1:
                     log.error("request failed for %s: %s", s["id"], e)
                     return {"id": s["id"], "gold": s["label"], "pred": None,
-                            "raw": f"<ERROR {e}>"[:400]}
+                            "raw": f"<ERROR {e}>"[:400],
+                            "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs)}
                 await asyncio.sleep(3 * (attempt + 1))
 
     tasks = [one(s) for s in samples]

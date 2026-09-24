@@ -1,0 +1,20 @@
+\documentclass[10pt]{article}
+\usepackage{booktabs}
+\usepackage{geometry}
+\geometry{margin=1.6cm, landscape}
+\usepackage{caption}
+\captionsetup{font=small}
+\begin{document}
+\begin{table*}[t]\centering
+\caption{Reproduction vs the paper's Table~4 (F1). Each model occupies two rows: our reproduced score and, beneath it, $\Delta$ = ours $-$ paper. The Avg column averages over the 6/8 columns present on both sides.}
+\label{tab:table4-compare}
+\begin{tabular}{lccccccc}	oprule
+Model & VLGuard & JailBreakV & SPA-VL & VLSBench & MM-Safety & BeaverTails-V & Avg \\\midrule
+Qwen3-VL-8B & 0.6003 & 0.7593 & 0.6214 & 0.3207 & 0.5005 & 0.7273 & 0.5883 \\
+\hspace{1.2em}$\Delta$ vs paper & +0.0468 & -0.1691 & -0.0786 & -0.4377 & -0.1401 & +0.0766 & -0.1170 \\
+Qwen3-VL-4B & 0.8238 & 0.8297 & 0.6824 & 0.8758 & 0.8820 & 0.5611 & 0.7758 \\
+\hspace{1.2em}$\Delta$ vs paper & +0.2536 & -0.0909 & +0.0319 & +0.1890 & +0.2717 & -0.1617 & +0.0823 \\
+SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.9551 & 0.8653 & 0.8234 & 0.8691 \\
+\hspace{1.2em}$\Delta$ vs paper & +0.0025 & -0.0645 & -0.0795 & -0.0117 & -0.0159 & -0.0081 & -0.0295 \\
+\bottomrule\end{tabular}\end{table*}
+\end{document}
