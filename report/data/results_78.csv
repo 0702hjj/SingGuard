@@ -35,3 +35,15 @@ ts,model,label,dataset,engine,unparsable,n_error,n_input_error,thinking,max_toke
 2026-09-24 14:36:56,sing-guard-4b,SingGuard-4B,vlsbench,vllm,0,0,0,fast,1024,,False,1000,1000,944,1.0,0.944,0.9712,0
 2026-09-24 14:38:51,sing-guard-4b,SingGuard-4B,mm-safety,vllm,0,0,0,fast,1024,,False,758,758,494,1.0,0.6517,0.7891,0
 2026-09-24 14:42:29,sing-guard-4b,SingGuard-4B,beavertails-v,vllm,0,0,0,fast,1024,,False,1000,372,378,0.836,0.8495,0.8427,0
+2026-09-24 15:27:58,sing-guard-4b,SingGuard-4B,mmds-q,vllm,1,1,0,fast,1024,,False,1000,314,465,0.6473,0.9586,0.7728,0
+2026-09-24 15:38:43,sing-guard-4b,SingGuard-4B,mmds-r,vllm,3,3,0,fast,1024,,False,1000,255,374,0.6203,0.9098,0.7377,0
+2026-09-24 15:41:03,sing-guard-2b,SingGuard-2B,vlguard,vllm,0,0,0,fast,1024,,False,1000,442,444,0.9527,0.957,0.9549,0
+2026-09-24 15:42:01,sing-guard-2b,SingGuard-2B,jailbreakv,vllm,0,0,0,fast,1024,,False,1000,1000,844,1.0,0.844,0.9154,0
+2026-09-24 15:42:32,sing-guard-2b,SingGuard-2B,spa-vl,vllm,0,0,0,fast,1024,,False,530,265,485,0.5381,0.9849,0.696,0
+2026-09-24 15:44:50,sing-guard-2b,SingGuard-2B,vlsbench,vllm,0,0,0,fast,1024,,False,1000,1000,978,1.0,0.978,0.9889,0
+2026-09-24 15:46:19,sing-guard-2b,SingGuard-2B,mm-safety,vllm,0,0,0,fast,1024,,False,758,758,690,1.0,0.9103,0.953,0
+2026-09-24 15:49:17,sing-guard-2b,SingGuard-2B,beavertails-v,vllm,0,0,0,fast,1024,,False,1000,372,421,0.7601,0.8602,0.8071,0
+2026-09-24 15:55:52,sing-guard-2b,SingGuard-2B,mmds-q,vllm,5,1,0,fast,1024,,False,1000,314,446,0.6435,0.914,0.7553,0
+2026-09-24 16:02:18,sing-guard-2b,SingGuard-2B,mmds-r,vllm,3,3,0,fast,1024,,False,1000,255,349,0.6304,0.8627,0.7285,0
+2026-09-24 16:19:21,sing-guard-8b,SingGuard-8B,mmds-q,vllm,1,1,0,fast,1024,,False,1000,314,463,0.6479,0.9554,0.7722,0
+2026-09-24 16:35:35,sing-guard-8b,SingGuard-8B,mmds-r,vllm,3,3,0,fast,1024,,False,1000,255,347,0.6254,0.851,0.7209,0

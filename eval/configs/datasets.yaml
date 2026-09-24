@@ -66,3 +66,17 @@ mmds-r:
   label: MMDS-R
   hf_id: leost233/MMDS
   loader: mmds
+
+# Interleaved-variant A/B: same dialogue/ids/labels as mmds-q|r, but images sit at their
+# turn positions (see sgeval.adapters.SingGuardAdapter._content_segmented).
+mmds-q-int:
+  <<: *defaults
+  label: MMDS-Q-INT
+  hf_id: leost233/MMDS
+  loader: mmds
+
+mmds-r-int:
+  <<: *defaults
+  label: MMDS-R-INT
+  hf_id: leost233/MMDS
+  loader: mmds

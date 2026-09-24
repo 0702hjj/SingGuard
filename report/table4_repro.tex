@@ -6,14 +6,15 @@
 \captionsetup{font=small}
 \begin{document}
 \begin{table*}[t]\centering
-\caption{Reproduction of the SingGuard technical report's Table~4: multimodal safety benchmark results (F1 on the unsafe class) using the released checkpoints in \texttt{thinking\_type=fast} with greedy decoding. MMDS columns are still running; Columns present: 6/8.}
+\caption{Reproduction of the SingGuard technical report's Table~4: multimodal safety benchmark results (F1 on the unsafe class) using the released checkpoints in \texttt{thinking\_type=fast} with greedy decoding. Columns present: 8/8.}
 \label{tab:table4-repro}
 \begin{tabular}{lccccccccc}\toprule
 Model & VLGuard & JailBreakV & SPA-VL & MMDS-Q & MMDS-R & VLSBench & MM-Safety & BeaverTails-V & Avg \\\midrule
 Qwen3-VL-8B & 0.6003 & 0.7593 & 0.6214 & -- & -- & 0.3207 & 0.5005 & 0.7273 & 0.5882 \\
 Qwen3-VL-4B & 0.8238 & 0.8297 & 0.6824 & -- & -- & 0.8758 & 0.8820 & 0.5611 & 0.7758 \\
-SingGuard-4B & 0.9472 & 0.9071 & 0.7005 & -- & -- & 0.9712 & 0.7891 & 0.8427 & 0.8596 \\
-SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & -- & -- & 0.9551 & 0.8653 & 0.8234 & 0.8691 \\
+SingGuard-2B & 0.9549 & 0.9154 & 0.6960 & 0.7553 & 0.7285 & 0.9889 & 0.9530 & 0.8071 & 0.8499 \\
+SingGuard-4B & 0.9472 & 0.9071 & 0.7005 & 0.7728 & 0.7377 & 0.9712 & 0.7891 & 0.8427 & 0.8335 \\
+SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.7722 & 0.7209 & 0.9551 & 0.8653 & 0.8234 & 0.8385 \\
 \bottomrule\end{tabular}\end{table*}
 
 \section*{Notes}

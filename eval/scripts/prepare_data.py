@@ -403,7 +403,17 @@ def load_mmds(raw_dir: Path, key: str):
         last_asst = conv[-1].get("content") if conv[-1].get("role") == "assistant" else None
         ctx_turns = conv[:-1] if last_asst is not None else conv
         context = "\n".join(f'[{t["role"]}]: {t.get("content", "")}'.strip() for t in ctx_turns)
-        base = {"image": imgs or None, "query": context, "src": f"mmds:{rec.get('id')}"}
+        # interleaved variant: text/image segments so images sit at their turn positions
+        segments = []
+        for t in ctx_turns:
+            txt = f'[{t["role"]}]: {t.get("content", "")}'.strip()
+            for pth in img_list(t):
+                cand = raw_dir / pth
+                if cand.exists():
+                    segments.append(["image", str(cand.relative_to(DATA_DIR))])
+            segments.append(["text", txt + "\n"])
+        base = {"image": imgs or None, "query": context, "segments": segments,
+                "src": f"mmds:{rec.get('id')}"}
         if rec.get("user_rating") in ("Safe", "Unsafe"):
             by_side["q"].append({**base, "response": None,
                                  "label": 0 if rec["user_rating"] == "Safe" else 1})
@@ -456,20 +466,23 @@ def stratified_sample(rows: list[dict], n: int, seed: int) -> list[dict]:
 
 
 def write_split(rows: list[dict], out_dir: Path, key: str, sample: int, seed: int,
-                id_prefix: str):
+                id_prefix: str, with_segments: bool = False):
     out_dir.mkdir(parents=True, exist_ok=True)
     picked = stratified_sample(rows, sample, seed)
     # deterministic shuffle so `runner.py --limit N` takes a balanced-ish prefix
     random.Random(seed + 1).shuffle(picked)
     with (out_dir / "test.jsonl").open("w") as f:
         for i, r in enumerate(picked):
-            f.write(json.dumps({
+            rec = {
                 "id": f"{id_prefix}-{i:05d}",
                 "image": r.get("image"),
                 "query": r["query"],
                 "response": r.get("response"),
                 "label": r["label"],
-            }, ensure_ascii=False) + "\n")
+            }
+            if with_segments and r.get("segments"):
+                rec["segments"] = r["segments"]   # interleaved variant (MMDS A/B)
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     manifest = {"dataset": key, "source_rows": len(rows), "sampled": len(picked),
                 "seed": seed, "n_unsafe": sum(r["label"] for r in picked),
                 "n_with_image": sum(1 for r in picked if r.get("image")),
@@ -509,6 +522,10 @@ def main() -> int:
             if "q" in sides:
                 write_split(sides["q"], DATA_DIR / "mmds-q", "mmds-q", sample, seed, "mmdsq")
                 write_split(sides["r"], DATA_DIR / "mmds-r", "mmds-r", sample, seed, "mmdsr")
+                write_split(sides["q"], DATA_DIR / "mmds-q-int", "mmds-q-int", sample, seed, "mmdsq",
+                            with_segments=True)
+                write_split(sides["r"], DATA_DIR / "mmds-r-int", "mmds-r-int", sample, seed, "mmdsr",
+                            with_segments=True)
             continue
         if not args.no_download:
             try:

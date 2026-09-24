@@ -49,12 +49,30 @@ class Adapter:
 
 class SingGuardAdapter(Adapter):
     """Official chat template (policy/thinking controls live inside the template itself).
-    Response moderation follows the model card: user turn, then assistant turn."""
+    Response moderation follows the model card: user turn, then assistant turn.
+
+    If the sample carries `segments` ([[kind, value], ...] with kind in {text, image}),
+    the content is assembled in that order so each image sits at its turn position
+    instead of being stacked at the message start (used by the MMDS A/B)."""
 
     name = "singguard"
 
+    def _content_segmented(self, s, image_urls):
+        segs = s.get("segments") or []
+        parts, img_i = [], 0
+        for kind, value in segs:
+            if kind == "image":
+                if img_i < len(image_urls):
+                    parts.append({"type": "image_url", "image_url": {"url": image_urls[img_i]}})
+                    img_i += 1
+            elif value:
+                parts.append({"type": "text", "text": value})
+        return parts or _content(image_urls, s["query"])
+
     def messages(self, s, image_urls):
-        msgs = [{"role": "user", "content": _content(image_urls, s["query"])}]
+        first = (self._content_segmented(s, image_urls) if s.get("segments")
+                 else _content(image_urls, s["query"]))
+        msgs = [{"role": "user", "content": first}]
         if s.get("response"):
             msgs.append({"role": "assistant", "content": [{"type": "text", "text": s["response"]}]})
         return msgs

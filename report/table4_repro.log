@@ -1,0 +1,176 @@
+This is XeTeX, Version 3.141592653-2.6-0.999998 (TeX Live 2026/Arch Linux) (preloaded format=xelatex 2026.7.21)  24 SEP 2026 15:22
+entering extended mode
+ restricted \write18 enabled.
+ %&-line parsing enabled.
+**table4_repro.tex
+(./table4_repro.tex
+LaTeX2e <2025-11-01>
+L3 programming layer <2026-01-19>
+(/usr/share/texmf-dist/tex/latex/base/article.cls
+Document Class: article 2025/01/22 v1.4n Standard LaTeX document class
+(/usr/share/texmf-dist/tex/latex/base/size10.clo
+File: size10.clo 2025/01/22 v1.4n Standard LaTeX file (size option)
+)
+\c@part=\count271
+\c@section=\count272
+\c@subsection=\count273
+\c@subsubsection=\count274
+\c@paragraph=\count275
+\c@subparagraph=\count276
+\c@figure=\count277
+\c@table=\count278
+\abovecaptionskip=\skip49
+\belowcaptionskip=\skip50
+\bibindent=\dimen148
+)
+(/usr/share/texmf-dist/tex/latex/booktabs/booktabs.sty
+Package: booktabs 2020/01/12 v1.61803398 Publication quality tables
+\heavyrulewidth=\dimen149
+\lightrulewidth=\dimen150
+\cmidrulewidth=\dimen151
+\belowrulesep=\dimen152
+\belowbottomsep=\dimen153
+\aboverulesep=\dimen154
+\abovetopsep=\dimen155
+\cmidrulesep=\dimen156
+\cmidrulekern=\dimen157
+\defaultaddspace=\dimen158
+\@cmidla=\count279
+\@cmidlb=\count280
+\@aboverulesep=\dimen159
+\@belowrulesep=\dimen160
+\@thisruleclass=\count281
+\@lastruleclass=\count282
+\@thisrulewidth=\dimen161
+)
+(/usr/share/texmf-dist/tex/latex/geometry/geometry.sty
+Package: geometry 2020/01/02 v5.9 Page Geometry
+
+(/usr/share/texmf-dist/tex/latex/graphics/keyval.sty
+Package: keyval 2022/05/29 v1.15 key=value parser (DPC)
+\KV@toks@=\toks17
+)
+(/usr/share/texmf-dist/tex/generic/iftex/ifvtex.sty
+Package: ifvtex 2019/10/25 v1.7 ifvtex legacy package. Use iftex instead.
+
+(/usr/share/texmf-dist/tex/generic/iftex/iftex.sty
+Package: iftex 2024/12/12 v1.0g TeX engine tests
+))
+\Gm@cnth=\count283
+\Gm@cntv=\count284
+\c@Gm@tempcnt=\count285
+\Gm@bindingoffset=\dimen162
+\Gm@wd@mp=\dimen163
+\Gm@odd@mp=\dimen164
+\Gm@even@mp=\dimen165
+\Gm@layoutwidth=\dimen166
+\Gm@layoutheight=\dimen167
+\Gm@layouthoffset=\dimen168
+\Gm@layoutvoffset=\dimen169
+\Gm@dimlist=\toks18
+)
+(/usr/share/texmf-dist/tex/latex/caption/caption.sty
+Package: caption 2023/08/05 v3.6o Customizing captions (AR)
+
+(/usr/share/texmf-dist/tex/latex/caption/caption3.sty
+Package: caption3 2023/07/31 v2.4d caption3 kernel (AR)
+\caption@tempdima=\dimen170
+\captionmargin=\dimen171
+\caption@leftmargin=\dimen172
+\caption@rightmargin=\dimen173
+\caption@width=\dimen174
+\caption@indent=\dimen175
+\caption@parindent=\dimen176
+\caption@hangindent=\dimen177
+Package caption Info: Standard document class detected.
+)
+\c@caption@flags=\count286
+\c@continuedfloat=\count287
+)
+(/usr/share/texmf-dist/tex/latex/l3backend/l3backend-xetex.def
+File: l3backend-xetex.def 2025-10-09 L3 backend support: XeTeX
+\g__graphics_track_int=\count288
+\g__pdfannot_backend_int=\count289
+\g__pdfannot_backend_link_int=\count290
+)
+No file table4_repro.aux.
+\openout1 = `table4_repro.aux'.
+
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 7.
+LaTeX Font Info:    ... okay on input line 7.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 7.
+LaTeX Font Info:    ... okay on input line 7.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 7.
+LaTeX Font Info:    ... okay on input line 7.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 7.
+LaTeX Font Info:    ... okay on input line 7.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 7.
+LaTeX Font Info:    ... okay on input line 7.
+LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 7.
+LaTeX Font Info:    ... okay on input line 7.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 7.
+LaTeX Font Info:    ... okay on input line 7.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 7.
+LaTeX Font Info:    ... okay on input line 7.
+*geometry* driver: auto-detecting
+*geometry* detected driver: xetex
+*geometry* verbose mode - [ preamble ] result:
+* driver: xetex
+* paper: <default>
+* layout: <same size as paper>
+* layoutoffset:(h,v)=(0.0pt,0.0pt)
+* modes: landscape 
+* h-part:(L,W,R)=(45.52458pt, 703.92082pt, 45.52458pt)
+* v-part:(T,H,B)=(45.52458pt, 523.24583pt, 45.52458pt)
+* \paperwidth=794.96999pt
+* \paperheight=614.295pt
+* \textwidth=703.92082pt
+* \textheight=523.24583pt
+* \oddsidemargin=-26.7454pt
+* \evensidemargin=-26.7454pt
+* \topmargin=-63.7454pt
+* \headheight=12.0pt
+* \headsep=25.0pt
+* \topskip=10.0pt
+* \footskip=30.0pt
+* \marginparwidth=65.0pt
+* \marginparsep=11.0pt
+* \columnsep=10.0pt
+* \skip\footins=9.0pt plus 4.0pt minus 2.0pt
+* \hoffset=0.0pt
+* \voffset=0.0pt
+* \mag=1000
+* \@twocolumnfalse
+* \@twosidefalse
+* \@mparswitchfalse
+* \@reversemarginfalse
+* (1in=72.27pt=25.4mm, 1cm=28.453pt)
+
+Package caption Info: Begin \AtBeginDocument code.
+Package caption Info: End \AtBeginDocument code.
+LaTeX Font Info:    External font `cmex10' loaded for size
+(Font)              <7> on input line 11.
+LaTeX Font Info:    External font `cmex10' loaded for size
+(Font)              <5> on input line 11.
+[1
+
+] (./table4_repro.aux)
+ ***********
+LaTeX2e <2025-11-01>
+L3 programming layer <2026-01-19>
+ ***********
+
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
+ ) 
+Here is how much of TeX's memory you used:
+ 2498 strings out of 470191
+ 45389 string characters out of 5479697
+ 451998 words of memory out of 5000000
+ 31130 multiletter control sequences out of 15000+600000
+ 627785 words of font info for 48 fonts, out of 8000000 for 9000
+ 14 hyphenation exceptions out of 8191
+ 57i,8n,65p,401b,403s stack positions out of 10000i,1000n,20000p,200000b,200000s
+
+Output written on table4_repro.pdf (1 page).
