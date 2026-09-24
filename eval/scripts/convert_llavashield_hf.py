@@ -180,19 +180,30 @@ def main() -> int:
     src, dst = args.src, args.dst
 
     cfg = build_config()
+    cfg.dtype = torch.bfloat16                     # recorded in config.json
     print(f"building {type(cfg).__name__} (vision {cfg.vision_config.num_hidden_layers} layers,"
-          f" feature_layer={cfg.vision_feature_layer}, select={cfg.vision_feature_select_strategy})")
-    model = LlavaOnevisionForConditionalGeneration._from_config(cfg, dtype=torch.bfloat16)
+          f" feature_layer={cfg.vision_feature_layer}, select={cfg.vision_feature_select_strategy})",
+          flush=True)
+    # Build on the meta device: every tensor is overwritten from the checkpoint anyway, so
+    # initialising 7.6B random parameters first is pure waste (~15GB of writes, minutes).
+    prev = torch.get_default_dtype()
+    torch.set_default_dtype(torch.bfloat16)
+    try:
+        with torch.device("meta"):
+            model = LlavaOnevisionForConditionalGeneration(cfg)
+    finally:
+        torch.set_default_dtype(prev)
+    model = model.to_empty(device="cpu")
     model.eval()
     got = next(model.parameters()).dtype
-    if got != torch.bfloat16:                      # fall back for older _from_config
-        print(f"  _from_config gave {got}; casting")
+    if got != torch.bfloat16:
+        print(f"  meta model gave {got}; casting")
         model = model.to(torch.bfloat16)
     n_tgt = len(model.state_dict())
-    print(f"  target state_dict: {n_tgt} tensors")
+    print(f"  target state_dict: {n_tgt} tensors ({got})", flush=True)
 
     idx, mapping, unmapped, bad_shape, unfilled, tgt_shapes = plan(src, cfg, model)
-    print(f"source tensors: {len(idx)}   mapped: {len(mapping)}")
+    print(f"source tensors: {len(idx)}   mapped: {len(mapping)}", flush=True)
     if unmapped:
         print(f"!! UNMAPPED SOURCE KEYS ({len(unmapped)}):")
         for k in unmapped[:20]:
@@ -214,6 +225,7 @@ def main() -> int:
     by_file: dict[str, list[str]] = {}
     for k, f in idx.items():
         by_file.setdefault(f, []).append(k)
+    loaded: set[str] = set()
     for f in sorted(by_file):
         chunk = {}
         with safe_open(src / f, framework="pt", device="cpu") as fh:
@@ -225,13 +237,17 @@ def main() -> int:
                     return 1
                 chunk[mapping[k]] = t
         missing, unexpected = model.load_state_dict(chunk, strict=False)
-        if missing or unexpected:
-            print(f"!! {f}: missing={missing[:5]} unexpected={unexpected[:5]}")
+        if unexpected:
+            print(f"!! {f}: unexpected={unexpected[:5]}")
             return 1
-        print(f"  loaded {f} ({len(chunk)} tensors)")
+        loaded |= set(chunk)
+        print(f"  loaded {f} ({len(chunk)} tensors, {len(loaded)}/{n_tgt} total)", flush=True)
         del chunk
 
-    left = [k for k, p in model.state_dict().items() if k in tgt_shapes]
+    still = sorted(set(tgt_shapes) - loaded)
+    if still:
+        print(f"!! {len(still)} target tensors were never filled: {still[:10]}")
+        return 1
     print(f"all {n_tgt} target tensors loaded")
 
     # ---- write the checkpoint
@@ -244,6 +260,10 @@ def main() -> int:
     #      template is REMOVED: it has no <image> marker, so the image would be dropped.
     tok = AutoTokenizer.from_pretrained(src)
     tok.save_pretrained(dst)
+    # save_pretrained mirrors the inline template out to chat_template.jinja; the runner
+    # prefers a .jinja over chat_template.json, and that inline template has no <image>
+    # marker -- keeping both would silently drop the image.
+    (dst / "chat_template.jinja").unlink(missing_ok=True)
     _add_video_token(dst)
     tc = json.loads((dst / "tokenizer_config.json").read_text())
     tc["chat_template"] = None
@@ -287,13 +307,16 @@ def _add_video_token(dst: Path) -> None:
     if not any(t.get("content") == "<video>" for t in d.get("added_tokens", [])):
         d.setdefault("added_tokens", []).append({"id": 151647, **entry})
         tj.write_text(json.dumps(d))
-    for name, key in (("added_tokens.json", None), ("special_tokens_map.json", None)):
+    for name, key in (("added_tokens.json", "<video>"), ("tokenizer_config.json", None)):
         p = dst / name
-        if p.exists():
-            j = json.loads(p.read_text())
-            if name == "added_tokens.json":
-                j["<video>"] = 151647
-            p.write_text(json.dumps(j, indent=2) + "\n")
+        if not p.exists():
+            continue
+        j = json.loads(p.read_text())
+        if name == "added_tokens.json":
+            j[key] = 151647
+        else:
+            j.setdefault("added_tokens_decoder", {})["151647"] = entry
+        p.write_text(json.dumps(j, indent=2) + "\n")
 
 
 if __name__ == "__main__":

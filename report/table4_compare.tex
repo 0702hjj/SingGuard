@@ -1,70 +1,75 @@
 \documentclass[10pt]{article}
+% Plain article + xeCJK (no ctex), compiled with xelatex. Fonts are named explicitly so the
+% Chinese headings render without ctex's fontset machinery; Noto CJK ships with most
+% distributions, and TeX Live's Fandol is a drop-in alternative if it is missing:
+%   \setCJKmainfont{FandolSong-Regular.otf}[BoldFont=FandolHei-Regular.otf]
+\usepackage{xeCJK}
+% Noto CJK ships no italic face; AutoFakeSlant gives \emph a real slant instead of a
+% "font shape undefined" fallback.
+\setCJKmainfont{Noto Serif CJK SC}[BoldFont=Noto Sans CJK SC, AutoFakeSlant=0.2]
+\setCJKsansfont{Noto Sans CJK SC}[AutoFakeSlant=0.2]
+\setCJKmonofont{Noto Sans Mono CJK SC}
 \usepackage{booktabs}
 \usepackage{geometry}
 \geometry{margin=1.6cm, landscape}
 \usepackage{caption}
 \captionsetup{font=small}
+\renewcommand{\tablename}{表}      % "表 1: ..." rather than "Table 1: ..."
+\renewcommand{\figurename}{图}
 \begin{document}
 \begin{table*}[t]\centering
-\caption{Reproduction vs the paper's Table~4 (F1). Each model occupies two rows: our reproduced score and, beneath it, $\Delta$ = ours $-$ paper. The Avg column averages over the 8/8 columns present on both sides.}
+\caption{复现结果与论文表~4 的对比（F1）。每个模型占两行：第一行为我们复现的分数，其下为 $\Delta$ = 复现值 $-$ 论文值。平均列按两侧都有的 8/8 列取平均。}
 \label{tab:table4-compare}
 \begin{tabular}{lccccccccc}\toprule
-Model & VLGuard & JailBreakV & SPA-VL & MMDS-Q & MMDS-R & VLSBench & MM-Safety & BeaverTails-V & Avg \\\midrule
+模型 & VLGuard & JailBreakV & SPA-VL & MMDS-Q & MMDS-R & VLSBench & MM-Safety & BeaverTails-V & 平均 \\\midrule
 Qwen3-VL-8B & 0.6003 & 0.7593 & 0.6214 & -- & -- & 0.3207 & 0.5005 & 0.7273 & 0.5882 \\
-\hspace{1.2em}$\Delta$ vs paper & +0.0468 & -0.1691 & -0.0786 & -- & -- & -0.4377 & -0.1401 & +0.0766 & -0.0611 \\
+\hspace{1.2em}$\Delta$ vs 论文 & +0.0468 & -0.1691 & -0.0786 & -- & -- & -0.4377 & -0.1401 & +0.0766 & -0.0611 \\
 Qwen3-VL-4B & 0.8238 & 0.8297 & 0.6824 & -- & -- & 0.8758 & 0.8820 & 0.5611 & 0.7758 \\
-\hspace{1.2em}$\Delta$ vs paper & +0.2536 & -0.0909 & +0.0319 & -- & -- & +0.1890 & +0.2717 & -0.1617 & +0.1389 \\
+\hspace{1.2em}$\Delta$ vs 论文 & +0.2536 & -0.0909 & +0.0319 & -- & -- & +0.1890 & +0.2717 & -0.1617 & +0.1389 \\
 LlavaGuard & 0.4290 & 0.4756 & -- & -- & -- & -- & -- & -- & 0.4523 \\
-\hspace{1.2em}$\Delta$ vs paper & -0.0713 & +0.1566 & -- & -- & -- & -- & -- & -- & -0.0417 \\
+\hspace{1.2em}$\Delta$ vs 论文 & -0.0713 & +0.1566 & -- & -- & -- & -- & -- & -- & -0.0417 \\
 GuardReasoner-VL-7B & 0.8822 & 0.9005 & 0.6541 & -- & -- & 0.6130 & 0.6318 & 0.5149 & 0.6994 \\
-\hspace{1.2em}$\Delta$ vs paper & -0.0211 & -0.0447 & -0.0443 & -- & -- & -0.0176 & -0.0380 & -0.0271 & +0.0510 \\
+\hspace{1.2em}$\Delta$ vs 论文 & -0.0211 & -0.0447 & -0.0443 & -- & -- & -0.0176 & -0.0380 & -0.0271 & +0.0510 \\
 SingGuard-2B & 0.9549 & 0.9154 & 0.6960 & 0.9379 & 0.9291 & 0.9889 & 0.9530 & 0.8071 & 0.8978 \\
-\hspace{1.2em}$\Delta$ vs paper & +0.0158 & -0.0351 & -0.0822 & -0.0318 & +0.0331 & +0.0286 & +0.1121 & +0.0024 & +0.0054 \\
+\hspace{1.2em}$\Delta$ vs 论文 & +0.0158 & -0.0351 & -0.0822 & -0.0318 & +0.0331 & +0.0286 & +0.1121 & +0.0024 & +0.0054 \\
 SingGuard-4B & 0.9472 & 0.9071 & 0.7005 & 0.9032 & 0.9046 & 0.9712 & 0.7891 & 0.8427 & 0.8707 \\
-\hspace{1.2em}$\Delta$ vs paper & +0.0176 & -0.0623 & -0.0755 & -0.0573 & +0.0317 & +0.0179 & -0.0714 & +0.0090 & -0.0238 \\
+\hspace{1.2em}$\Delta$ vs 论文 & +0.0176 & -0.0623 & -0.0755 & -0.0573 & +0.0317 & +0.0179 & -0.0714 & +0.0090 & -0.0238 \\
 SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.9571 & 0.8908 & 0.9551 & 0.8653 & 0.8234 & 0.8828 \\
-\hspace{1.2em}$\Delta$ vs paper & +0.0025 & -0.0645 & -0.0795 & -0.0280 & -0.0055 & -0.0117 & -0.0159 & -0.0081 & -0.0263 \\
+\hspace{1.2em}$\Delta$ vs 论文 & +0.0025 & -0.0645 & -0.0795 & -0.0280 & -0.0055 & -0.0117 & -0.0159 & -0.0081 & -0.0263 \\
 \bottomrule\end{tabular}\end{table*}
 
 
-\section*{Notes}
+\section*{说明}
 \begin{itemize}\itemsep2pt
-  \item \textbf{Configuration.} Released checkpoints; SingGuard rows use
-        \texttt{thinking\_type=fast} (the paper's Sec.~2.6 mode for high-throughput benchmark
-        evaluation), greedy decoding, \texttt{max\_model\_len}=32768.
-  \item \textbf{SPA-VL protocol.} The official test sets are EvalHarm (265) + EvalHelp (265);
-        their filenames are \emph{not} query-safety labels (EvalHelp measures helpfulness and
-        contains hate-annotated images; EvalHarm measures refusal behaviour). We map
-        harm$\rightarrow$unsafe / help$\rightarrow$safe, the reading most consistent with the
-        paper's numbers for this column; treat its absolute value as protocol-dependent.
-  \item \textbf{JailBreakV coverage.} HF hosts only $\sim$360 of the 28{,}000 images, so 662/1000
-        of our sampled rows run text-only. On the image-bearing subset (the benchmark's designed
-        form) SingGuard-8B scores F1 0.9600 vs the paper's 0.9728.
-  \item \textbf{MMDS protocol.} The corpus carries an official \texttt{set} field
-        (train 4045 / val 109 / test 330); we score the \emph{test} split, as the paper does.
-        Scoring a stratified sample of the whole corpus instead drops SingGuard-8B to
-        0.7722/0.7209 --- the earlier gap in this column was a sampling error on our side,
-        not a protocol or checkpoint difference.
-  \item \textbf{MM-Safety is all-unsafe.} The benchmark is a set of malicious instructions
-        (every sampled row is gold-unsafe), so its F1 reduces to a precision-weighted recall
-        on the attack set and is sensitive to which attacks are sampled.
-  \item \textbf{Baseline harness fidelity.} Each baseline is driven through its own
-        released prompt/template, not a common one. Two defects found and fixed this way:
-        LlavaGuard's template ships as \texttt{chat\_template.json} with no inline copy, so
-        vLLM silently substituted a generic template and the model returned JSON missing its
-        leading keys on 26\% of samples; and GuardReasoner-VL's official interface (INSTRUCTION
-        as a system message, a \texttt{Human user:/AI assistant:} transcript, verdict in a
-        \texttt{<result>} block) differs from a plain chat call. Baseline prompts are still
-        approximations in general --- the paper publishes only SingGuard's templates --- so
-        their per-column deltas are indicative, not exact.
-  \item \textbf{Still missing.} LlamaGuard3-Vision-11B and LlamaGuard4-12B rows (queued);
-        LLaVAShield-v1.0-7B ships a LLaVA-NeXT training-format checkpoint
-        (\texttt{LlavaQwenForCausalLM}, no \texttt{auto\_map}) that neither vLLM 0.11 nor
-        transformers loads directly --- a converted copy is being validated.
-  \item \textbf{Qwen3-VL-235B} is not run: bf16 ($\sim$470\,GB) / FP8 ($\sim$235\,GB) does not fit
-        a shared 8$\times$A6000 node without multi-GPU tensor parallelism.
-  \item Baseline prompts are approximations (the paper publishes only SingGuard's templates);
-        per-column deltas for baseline rows are therefore indicative, not exact.
+  \item \textbf{配置.} 使用官方发布的 checkpoint；SingGuard 各行采用论文
+        Sec.~2.6 中面向高吞吐基准评测的 \texttt{thinking\_type=fast}，贪心解码，
+        \texttt{max\_model\_len}=32768。
+  \item \textbf{MMDS 口径.} 语料自带官方 \texttt{set} 字段
+        （train 4045 / val 109 / test 330），我们与论文一致地评测 \emph{test} 划分。
+        若改为在全量语料上分层采样，SingGuard-8B 会掉到 0.7722/0.7209------该列此前的
+        差距源于我们这边的采样错误，而非协议或权重的差异。
+  \item \textbf{SPA-VL 协议.} 官方测试集为 EvalHarm (265) + EvalHelp (265)；其文件名
+        \emph{并非}查询安全性标签（EvalHelp 衡量有用性，且包含带仇恨标注的图像；EvalHarm
+        衡量拒答行为）。我们按 harm$\rightarrow$unsafe / help$\rightarrow$safe 映射，
+        这是与该列论文数值最自洽的读法；其绝对值应视为依赖协议。
+  \item \textbf{JailBreakV 覆盖率.} HF 上仅有约 360 张（共 28{,}000 张）图像，
+        因此我们采样的 1000 行中有 662 行为纯文本。在带图像子集（该基准的设计形态）上，
+        SingGuard-8B 的 F1 为 0.9600，论文为 0.9728。
+  \item \textbf{MM-Safety 全为 unsafe.} 该基准由恶意指令构成（我们采样的每一行 gold 均为
+        unsafe），因此其 F1 退化为攻击集上的加权召回，对采样到哪些攻击敏感。
+  \item \textbf{基线实现保真度.} 每条基线都走其自身发布的 prompt/模板，而非统一模板。
+        由此发现并修复了两处缺陷：LlavaGuard 的模板以 \texttt{chat\_template.json} 形式发布
+        且 \texttt{tokenizer\_config} 中没有内联副本，导致 vLLM 静默改用通用模板，
+        26\% 的样本返回缺失开头键的 JSON 残片；GuardReasoner-VL 的官方接口
+        （INSTRUCTION 作为 system message、\texttt{Human user:/AI assistant:} 转录、
+        结论置于 \texttt{<result>} 块）并非常规 chat 调用。总体而言基线 prompt 仍是近似------
+        论文只公布了 SingGuard 的模板------故其逐列 $\Delta$ 仅供参考，并非精确值。
+  \item \textbf{尚缺.} LlamaGuard3-Vision-11B 与 LlamaGuard4-12B 两行（已排队）；
+        LLaVAShield-v1.0-7B 发布的是 LLaVA-NeXT 训练格式 checkpoint
+        （\texttt{LlavaQwenForCausalLM}，无 \texttt{auto\_map}），vLLM 0.11 与 transformers
+        均无法直接加载------转换版本正在验证中。
+  \item \textbf{Qwen3-VL-235B} 未运行：bf16（约 470\,GB）/ FP8（约 235\,GB）无法在共享的
+        8$\times$A6000 节点上容纳（除非使用多卡张量并行）。
 \end{itemize}
 
 \end{document}
