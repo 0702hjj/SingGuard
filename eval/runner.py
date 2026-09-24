@@ -96,7 +96,15 @@ def eval_dataset(model_key: str, mcfg: dict, ds_key: str, samples: list[dict], a
     todo = [s for s in samples if s["id"] not in done]
 
     if todo:
-        if args.engine == "hf" or (args.engine == "auto" and mcfg.get("engine") == "hf"):
+        if mcfg.get("engine") == "classifier":
+            from sgeval.classifier import run_dataset_classifier
+            cls_cfg = mcfg.get("cls") or {}
+            records = run_dataset_classifier(
+                str(EVAL_DIR / mcfg["path"]), todo, EVAL_DIR / "data",
+                threshold=cls_cfg.get("threshold", 0.5),
+                batch_size=cls_cfg.get("batch_size", 8),
+                progress_desc=f"{model_key}/{ds_key}")
+        elif args.engine == "hf" or (args.engine == "auto" and mcfg.get("engine") == "hf"):
             records = run_dataset_hf(
                 str(EVAL_DIR / mcfg["path"]), todo, adapter, mcfg.get("gen", {}),
                 mcfg.get("chat_template_kwargs") or {}, EVAL_DIR / "data",
@@ -218,6 +226,8 @@ def main() -> int:
             continue
 
         use_hf = args.engine == "hf" or (args.engine == "auto" and mcfg.get("engine") == "hf")
+        if mcfg.get("engine") == "classifier":
+            use_hf = True          # no vLLM server for the classifier path
         server = None
         if not use_hf:
             server = VLLMServer(

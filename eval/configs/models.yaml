@@ -109,30 +109,28 @@ llavashield-v1-7b:
 
 safeguard-vl:
   <<: *defaults
-  enabled: false
   label: SafeGuard-VL
-  adapter: generic_vlm_guard
-  hf_id: TBD   # Piao et al. 2026 checkpoint id - verify before enabling
+  adapter: safeguard_vl
+  hf_id: tyodd/SafeGuard-VL-RL     # CVPR 2026 "Towards Policy-Adaptive Image Guardrail" (Qwen2.5-VL-7B + GRPO)
   path: models/safeguard-vl
   max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 512}
 
 shieldgemma-2-4b:
   <<: *defaults
-  enabled: false           # gated on HF: accept license on the web page, then export HF_TOKEN
   label: ShieldGemma-2
-  adapter: shieldgemma2
+  adapter: shieldgemma2-cls
+  engine: classifier                       # ShieldGemma2ForImageClassification (SigLIP2+Gemma3-4B), image-only
+  ms_id: google/shieldgemma-2-4b-it        # ModelScope mirror (hf-mirror returns 403 for this repo)
   hf_id: google/shieldgemma-2-4b-it
   path: models/shieldgemma-2-4b
-  max_model_len: 32768
-  gen: {temperature: 0.0, max_tokens: 64}
+  cls: {threshold: 0.5, batch_size: 8}
 
 llama-guard3-vision-11b:
   <<: *defaults
-  enabled: false           # gated on HF; use engine hf if vllm load fails
-  engine: hf
   label: LlamaGuard3-Vision-11B
   adapter: llamaclassic
+  ms_id: LLM-Research/Llama-Guard-3-11B-Vision   # Meta mirror on ModelScope (HF repo is gated)
   hf_id: meta-llama/Llama-Guard-3-11B-Vision
   path: models/llama-guard3-vision-11b
   max_model_len: 32768
@@ -140,9 +138,9 @@ llama-guard3-vision-11b:
 
 llama-guard4-12b:
   <<: *defaults
-  enabled: false           # gated on HF
   label: LlamaGuard4
   adapter: llamaclassic
+  ms_id: LLM-Research/Llama-Guard-4-12B          # Meta mirror on ModelScope
   hf_id: meta-llama/Llama-Guard-4-12B
   path: models/llama-guard4-12b
   max_model_len: 32768
