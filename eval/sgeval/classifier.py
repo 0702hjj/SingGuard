@@ -46,8 +46,11 @@ def run_dataset_classifier(model_path: str, samples: list[dict], data_dir: Path,
 
     log.info("loading classifier %s", model_path)
     processor = AutoProcessor.from_pretrained(model_path)
+    # Plain .to(device) rather than device_map="auto": the latter pulls in `accelerate`,
+    # which the offline environment does not have, and CUDA_VISIBLE_DEVICES already pins
+    # the process to one GPU so there is nothing for a device map to decide.
     model = ShieldGemma2ForImageClassification.from_pretrained(
-        model_path, torch_dtype=torch.bfloat16, device_map="auto").eval()
+        model_path, torch_dtype=torch.bfloat16).eval().to("cuda")
 
     def first_image(s: dict) -> str | None:
         v = s.get("image")

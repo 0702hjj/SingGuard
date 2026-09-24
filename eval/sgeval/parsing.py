@@ -47,13 +47,14 @@ def parse_decision(text: str, *, where: str = "first_line") -> int | None:
         except (ValueError, json.JSONDecodeError):
             payload = None
         if isinstance(payload, dict):
-            for key in ("predicted_label", "prediction", "label"):
+            # `rating` is LlavaGuard's official key; the others cover paraphrases.
+            for key in ("rating", "predicted_label", "prediction", "label"):
                 if key in payload:
                     return _norm(str(payload[key]))
         # LlavaGuard routinely emits unescaped quotes inside "explanation", which makes the
         # object unparseable. Recover the verdict by matching the field directly instead of
         # discarding the row.
-        m = re.search(r'"(?:predicted_label|prediction|label)"\s*:\s*"(safe|unsafe)"',
+        m = re.search(r'"(?:rating|predicted_label|prediction|label)"\s*:\s*"(safe|unsafe)"',
                       text, re.I)
         if m:
             return _norm(m.group(1))

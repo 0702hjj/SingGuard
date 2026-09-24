@@ -34,6 +34,10 @@ def _cfg_tag(adapter, gen_args: dict, chat_template_kwargs: dict, tpl: str = "")
     prediction it produces, so it belongs in the fingerprint too."""
     mode = (chat_template_kwargs or {}).get("thinking_type", "")
     base = f"{getattr(adapter, 'name', 'adapter')}|{mode}|{gen_args.get('max_tokens', '')}"
+    # A prompt or parser change answers a different question, so it belongs in the tag.
+    ver = getattr(adapter, "version", "")
+    if ver:
+        base += f"|v{ver}"
     # omit the component when there is no injected template so tags stay byte-identical to
     # the ones already stored for models vLLM resolves by itself
     return f"{base}|{tpl}" if tpl else base
