@@ -78,10 +78,22 @@ def main() -> int:
         return 0
 
     if rows_out:
-        exists = (RESULTS / "results.csv").exists()
-        with (RESULTS / "results.csv").open("a", newline="") as fh:
-            w = csv.DictWriter(fh, fieldnames=list(rows_out[0]))
-            if not exists:
+        path = RESULTS / "results.csv"
+        exists_before = path.exists()
+        # Column order must come from the file's own header, not from this row's key order:
+        # results.csv is written by several producers and DictWriter emits values in
+        # `fieldnames` order, so a differently-ordered row silently shifts every column.
+        if path.exists():
+            with path.open(newline="") as fh:
+                header = next(csv.reader(fh))
+            dropped = sorted({k for r in rows_out for k in r if k not in header})
+            if dropped:
+                print(f"[warn] keys absent from the results.csv header, dropped: {dropped}")
+        else:
+            header = list(rows_out[0])
+        with path.open("a", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=header, extrasaction="ignore")
+            if not exists_before:
                 w.writeheader()
             w.writerows(rows_out)
         print(f"\nappended {len(rows_out)} rows to results.csv")
