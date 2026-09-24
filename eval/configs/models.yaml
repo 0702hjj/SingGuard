@@ -29,7 +29,7 @@ sing-guard-2b:
   path: models/sing-guard-2b
   max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 1024}
-  chat_template_kwargs: {thinking_type: fast-slow}  # README canonical example is hybrid-format; fast mode misclassifies the official bomb example
+  chat_template_kwargs: {thinking_type: fast}   # paper Sec 2.6: fast judgment is used for high-throughput benchmark evaluation; empirically reproduces Table 4 (8B VLGuard 0.9536 vs paper 0.9511)
 
 sing-guard-4b:
   <<: *defaults
@@ -40,7 +40,7 @@ sing-guard-4b:
   path: models/sing-guard-4b
   max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 1024}
-  chat_template_kwargs: {thinking_type: fast-slow}
+  chat_template_kwargs: {thinking_type: fast}   # paper Sec 2.6: fast judgment is used for high-throughput benchmark evaluation; empirically reproduces Table 4 (8B VLGuard 0.9536 vs paper 0.9511)
 
 sing-guard-8b:
   <<: *defaults
@@ -51,7 +51,7 @@ sing-guard-8b:
   path: models/sing-guard-8b
   max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 1024}
-  chat_template_kwargs: {thinking_type: fast-slow}
+  chat_template_kwargs: {thinking_type: fast}   # paper Sec 2.6: fast judgment is used for high-throughput benchmark evaluation; empirically reproduces Table 4 (8B VLGuard 0.9536 vs paper 0.9511)
 
 qwen3-vl-4b:
   <<: *defaults
@@ -88,7 +88,7 @@ llavaguard-7b:
   <<: *defaults
   label: LlavaGuard
   adapter: llavaguard
-  hf_id: AIML-TUDA/LlavaGuard-v1.1-7B-hf   # correct author id; paper does not specify the version
+  hf_id: AIML-TUDA/LlavaGuard-v1.0-7B-hf   # original release matching the paper citation; reachable via hf-mirror
   path: models/llavaguard-7b
   max_model_len: 4096                           # LLaVA-1.5 context limit
   gen: {temperature: 0.0, max_tokens: 256}
