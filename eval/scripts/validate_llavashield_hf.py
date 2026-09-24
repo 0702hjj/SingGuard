@@ -21,6 +21,7 @@ import base64
 import json
 import re
 import sys
+import urllib.error
 from pathlib import Path
 
 EVAL = Path(__file__).resolve().parent.parent
@@ -78,7 +79,7 @@ def load_mmds(n: int):
     rows = [json.loads(l) for l in (DATA / "mmds-q" / "test.jsonl").read_text().splitlines()]
     by_label = {"0": [], "1": []}
     for r in rows:
-        by_label[r["label"]].append(r)
+        by_label[str(r["label"])].append(r)
     out = []
     half = max(1, n // 2)
     for lab, tag in (("0", "Safe"), ("1", "Unsafe")):
@@ -94,12 +95,18 @@ def load_mmds(n: int):
 
 
 def render(case):
-    """Case -> (messages, images) using the repo's LLaVAShieldAdapter."""
+    """Case -> (messages, images) using the repo's LLaVAShieldAdapter.
+
+    The OpenAI-style messages carry base64 data URLs, exactly as the runner's
+    `urls_for`/`image_to_data_url` produce them in production; HF mode only needs the
+    paths separately.
+    """
     from sgeval.adapters import LLaVAShieldAdapter
+    from sgeval.engine import image_to_data_url
 
     img_paths = [DATA / p for p in (case["image"] or [])]
     a = LLaVAShieldAdapter()
-    msgs = a.messages(case, [str(p) for p in img_paths])
+    msgs = a.messages(case, [image_to_data_url(str(p)) for p in img_paths])
     return msgs, img_paths
 
 
@@ -108,16 +115,24 @@ def parse_verdict(text: str):
     block = m.group(1) if m else (text or "")
     mm = re.search(r"\{.*\}", block, re.DOTALL)
     if not mm:
-        return None, text
+        # no complete {...} at all: the run died mid-rationale, before ever closing the
+        # brace -- still salvage the verdict the model already committed to.
+        r = re.search(r'"user_rating"\s*:\s*"([^"]+)"', block)
+        return ({"user_rating": r.group(1), "_truncated": True}, text) if r else (None, text)
     try:
-        d = json.loads(mm.group(0))
+        return json.loads(mm.group(0)), text
     except ValueError:
-        # the model sometimes emits a trailing comma / single quotes; try a light repair
-        try:
-            d = json.loads(re.sub(r",\s*([}\]])", r"\1", mm.group(0)))
-        except ValueError:
-            return None, text
-    return d, text
+        pass
+    try:
+        # the model sometimes emits a trailing comma; try a light repair
+        return json.loads(re.sub(r",\s*([}\]])", r"\1", mm.group(0))), text
+    except ValueError:
+        pass
+    # output was cut off by the token budget mid-rationale: still salvage the verdict
+    r = re.search(r'"user_rating"\s*:\s*"([^"]+)"', block)
+    if r:
+        return {"user_rating": r.group(1), "_truncated": True}, text
+    return None, text
 
 
 # --------------------------------------------------------------------------- HF mode
@@ -126,9 +141,10 @@ def run_hf(cases, max_new_tokens=512):
     from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration
 
     print(f"loading {MODEL} with transformers ...")
-    proc = AutoProcessor.from_pretrained(MODEL)
+    proc = AutoProcessor.from_pretrained(MODEL)   # no accelerate on this box
     model = LlavaOnevisionForConditionalGeneration.from_pretrained(
-        MODEL, dtype=torch.bfloat16, device_map="cuda:0")
+        MODEL, dtype=torch.bfloat16)
+    model = model.to("cuda:0")
     model.eval()
     print("  chat_template from processor:",
           (proc.chat_template or "")[:60].replace("\n", "\\n"), "...")
@@ -185,6 +201,9 @@ def run_api(cases, base_url, max_tokens=512):
             with urllib.request.urlopen(req, timeout=300) as r:
                 resp = json.loads(r.read())
             txt = resp["choices"][0]["message"]["content"]
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")[:600]
+            txt = f"<REQUEST FAILED: HTTP {e.code}: {body}>"
         except Exception as e:  # noqa: BLE001
             txt = f"<REQUEST FAILED: {type(e).__name__}: {e}>"
         d, _ = parse_verdict(txt)

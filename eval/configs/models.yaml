@@ -100,9 +100,16 @@ llavashield-v1-7b:
   label: LLaVAShield
   adapter: llavashield
   hf_id: RealSafe/LLaVAShield-v1.0-7B   # exact version named in the paper (Table 10)
-  path: models/llavashield-v1-7b
-  max_model_len: 16384                  # model card: 16K context
-  gen: {temperature: 0.0, max_tokens: 512}
+  # The released weights are a LLaVA-NeXT training-format checkpoint
+  # (LlavaQwenForCausalLM, no auto_map) that neither vLLM nor transformers loads; we serve
+  # the key-renamed conversion in models/llavashield-v1-7b-hf (scripts/convert_llavashield_hf.py).
+  path: models/llavashield-v1-7b-hf
+  # The checkpoint's own text config says max_position_embeddings=32768 (the 16K figure is
+  # tokenizer_model_max_length, a tokenizer setting, not the model's context). 31% of MMDS-Q
+  # prompts exceed 16384 and every one of them is Unsafe-labelled, so a 16K cap would suppress
+  # exactly the unsafe recall this column measures.
+  max_model_len: 32768
+  gen: {temperature: 0.0, max_tokens: 1024}   # the rationale inside the JSON overruns 512
 
 # ---------------------------------------------------------------- optional rows
 # Available in the registry but not run by default. Fill path/ids and move into the enabled set
