@@ -68,8 +68,10 @@ def eval_dataset(model_key: str, mcfg: dict, ds_key: str, samples: list[dict], a
     preds_file = PREDS / f"{model_key}__{ds_key}{suffix}.jsonl"
     preds_file.parent.mkdir(parents=True, exist_ok=True)
 
-    from sgeval.engine import _cfg_tag
-    cur_cfg = _cfg_tag(adapter, mcfg.get("gen", {}), mcfg.get("chat_template_kwargs") or {})
+    from sgeval.engine import _cfg_tag, resolve_chat_template
+    _, _tpl_fp = resolve_chat_template(str(EVAL_DIR / mcfg.get("path", "")))
+    cur_cfg = _cfg_tag(adapter, mcfg.get("gen", {}), mcfg.get("chat_template_kwargs") or {},
+                       _tpl_fp)
     if any(s_.get("policy_list") for s_ in samples):
         cur_cfg += "+policy"   # per-sample active policy changes the prompt -> distinct config
 

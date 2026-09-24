@@ -50,6 +50,13 @@ def parse_decision(text: str, *, where: str = "first_line") -> int | None:
             for key in ("predicted_label", "prediction", "label"):
                 if key in payload:
                     return _norm(str(payload[key]))
+        # LlavaGuard routinely emits unescaped quotes inside "explanation", which makes the
+        # object unparseable. Recover the verdict by matching the field directly instead of
+        # discarding the row.
+        m = re.search(r'"(?:predicted_label|prediction|label)"\s*:\s*"(safe|unsafe)"',
+                      text, re.I)
+        if m:
+            return _norm(m.group(1))
         where = "first_line"   # JSON extraction failed -> fall back to text heuristics
 
     if where == "first_line":

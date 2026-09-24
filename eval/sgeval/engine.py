@@ -26,12 +26,65 @@ log = logging.getLogger("sgeval")
 _HF_CACHE: dict = {}   # model_path -> (processor, model), reused across datasets
 
 
-def _cfg_tag(adapter, gen_args: dict, chat_template_kwargs: dict) -> str:
+def _cfg_tag(adapter, gen_args: dict, chat_template_kwargs: dict, tpl: str = "") -> str:
     """Fingerprint of the inference configuration a record was produced under. Resume logic
     compares this so predictions from a different mode/max_tokens are never silently reused
-    (a real incident: fast-slow predictions were re-labelled as fast-mode results)."""
+    (a real incident: fast-slow predictions were re-labelled as fast-mode results).
+    `tpl` is the chat-template fingerprint: swapping a model's template changes every
+    prediction it produces, so it belongs in the fingerprint too."""
     mode = (chat_template_kwargs or {}).get("thinking_type", "")
-    return f"{getattr(adapter, 'name', 'adapter')}|{mode}|{gen_args.get('max_tokens', '')}"
+    base = f"{getattr(adapter, 'name', 'adapter')}|{mode}|{gen_args.get('max_tokens', '')}"
+    # omit the component when there is no injected template so tags stay byte-identical to
+    # the ones already stored for models vLLM resolves by itself
+    return f"{base}|{tpl}" if tpl else base
+
+
+def resolve_chat_template(model_path: str) -> tuple[str | None, str]:
+    """Find the chat template vLLM should use, returning (path_to_pass, fingerprint).
+
+    vLLM reads `tokenizer_config.json`'s inline `chat_template` or an explicit
+    `--chat-template`, and silently falls back to a generic template otherwise. Two
+    release conventions put the real template somewhere else:
+      - `chat_template.jinja` (SingGuard, LlamaGuard4, SafeGuard-VL) -- never read by vLLM
+        automatically, so passing it is an injection we are responsible for.
+      - `chat_template.json` with {"chat_template": "..."} (LLaVA-NeXT checkpoints).
+    LlavaGuard has neither an inline template nor a .jinja file, so it hit the fallback and
+    answered with the tail of a JSON object missing its leading keys on 26% of samples.
+
+    Models whose `tokenizer_config.json` already carries a template are left alone (and
+    contribute no fingerprint): vLLM would use the same string, so our tag should not
+    pretend otherwise.
+    """
+    import hashlib
+
+    md = Path(model_path)
+    # vLLM reads the inline template itself, so there is nothing for us to inject and
+    # nothing to fingerprint -- this model's prompts are already what its authors shipped.
+    try:
+        if json.loads((md / "tokenizer_config.json").read_text()).get("chat_template"):
+            return None, ""
+    except (OSError, ValueError):
+        pass
+    for cand in (md / "chat_template.jinja", md / "chat_template.json"):
+        if not cand.exists():
+            continue
+        if cand.suffix == ".jinja":
+            text = cand.read_text()
+        else:
+            try:
+                text = json.loads(cand.read_text())["chat_template"]
+            except (ValueError, KeyError, TypeError, OSError):
+                continue
+        if not text:
+            continue
+        # materialise to a path vLLM can read; keep it beside the model so it survives
+        out = md / "_chat_template.resolved.jinja"
+        try:
+            out.write_text(text)
+        except OSError:
+            continue
+        return str(out), hashlib.sha1(text.encode()).hexdigest()[:8]
+    return None, ""
 
 
 class ServerDeadError(RuntimeError):
@@ -65,6 +118,7 @@ class VLLMServer:
         self.max_num_seqs = max_num_seqs
         self.log_file = log_file
         self.proc: subprocess.Popen | None = None
+        self.template_fp = ""      # set by start(); part of the resume fingerprint
 
     @property
     def base_url(self) -> str:
@@ -104,10 +158,10 @@ class VLLMServer:
         # SingGuard-style models ship the guard prompt as a standalone chat_template.jinja
         # (tokenizer_config.chat_template is empty). Older vLLM only reads the string field
         # and silently falls back to the base model's template -- without the risk-category
-        # system prompt. Always point vLLM at the jinja file when present.
-        jinja = Path(self.model_path) / "chat_template.jinja"
-        if jinja.exists():
-            cmd += ["--chat-template", str(jinja)]
+        # system prompt. Always point vLLM at the resolved template when present.
+        tpl, self.template_fp = resolve_chat_template(self.model_path)
+        if tpl:
+            cmd += ["--chat-template", tpl]
         log.info("starting vLLM: %s", " ".join(cmd))
         logf = open(self.log_file, "ab") if self.log_file else subprocess.DEVNULL
         # own process group so stop() can reap the whole tree (vllm renames engine
@@ -182,7 +236,7 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
             # engine-death ratio -- one missing image would otherwise abort the model
             return {"id": s["id"], "gold": s["label"], "pred": None,
                     "raw": f"<INPUT_ERROR {e}>"[:400],
-                    "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs)}
+                    "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs, server.template_fp)}
         kw = dict(chat_template_kwargs or {})
         try:
             extra_kw = adapter.template_kwargs(s)
@@ -203,14 +257,14 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
                 # later tell truncation / provisional-vs-final apart (head-only lost it)
                 raw = text[:300] + ("…" + text[-250:] if len(text) > 550 else text[300:])
                 return {"id": s["id"], "gold": s["label"], "pred": pred, "raw": raw,
-                        "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs),
+                        "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs, server.template_fp),
                         "finish_reason": getattr(r.choices[0], "finish_reason", None)}
             except Exception as e:  # noqa: BLE001
                 if attempt == retries - 1:
                     log.error("request failed for %s: %s", s["id"], e)
                     return {"id": s["id"], "gold": s["label"], "pred": None,
                             "raw": f"<ERROR {e}>"[:400],
-                            "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs)}
+                            "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs, server.template_fp)}
                 await asyncio.sleep(3 * (attempt + 1))
 
     tasks = [one(s) for s in samples]
