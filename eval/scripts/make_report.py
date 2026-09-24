@@ -66,6 +66,31 @@ def load_results(paths: list[Path]) -> pd.DataFrame:
     return df.sort_values("ts").groupby(["model", "dataset"], as_index=False).last()
 
 
+
+NOTES_BLOCK = r"""
+\section*{Notes}
+\begin{itemize}\itemsep2pt
+  \item \textbf{Configuration.} Released checkpoints; SingGuard rows use
+        \texttt{thinking\_type=fast} (the paper's Sec.~2.6 mode for high-throughput benchmark
+        evaluation), greedy decoding, \texttt{max\_model\_len}=32768.
+  \item \textbf{SPA-VL protocol.} The official test sets are EvalHarm (265) + EvalHelp (265);
+        their filenames are \emph{not} query-safety labels (EvalHelp measures helpfulness and
+        contains hate-annotated images; EvalHarm measures refusal behaviour). We map
+        harm$\rightarrow$unsafe / help$\rightarrow$safe, the reading most consistent with the
+        paper's numbers for this column; treat its absolute value as protocol-dependent.
+  \item \textbf{JailBreakV coverage.} HF hosts only $\sim$360 of the 28{,}000 images, so 662/1000
+        of our sampled rows run text-only. On the image-bearing subset (the benchmark's designed
+        form) SingGuard-8B scores F1 0.9600 vs the paper's 0.9728.
+  \item \textbf{Pending.} MMDS-Q/MMDS-R columns (data ready, runs in flight); baseline guards
+        (LLaVAShield-v1.0-7B, LlamaGuard3-Vision-11B, LlamaGuard4-12B, ShieldGemma-2-4B,
+        SafeGuard-VL-RL, GuardReasoner-VL-7B, LlavaGuard-v1.0-7B) are downloading.
+  \item \textbf{Qwen3-VL-235B} is not run: bf16 ($\sim$470\,GB) / FP8 ($\sim$235\,GB) does not fit
+        a shared 8$\times$A6000 node without multi-GPU tensor parallelism.
+  \item Baseline prompts are approximations (the paper publishes only SingGuard's templates);
+        per-column deltas for baseline rows are therefore indicative, not exact.
+\end{itemize}
+"""
+
 def write_documents(df: pd.DataFrame, paper: pd.DataFrame, labels: dict) -> None:
     df = df.assign(Model=df["model"].map(labels))
     repro = df.pivot_table(index="Model", columns="dataset", values="f1", aggfunc="last")
@@ -120,8 +145,11 @@ def write_documents(df: pd.DataFrame, paper: pd.DataFrame, labels: dict) -> None
                     + f" & {o_avg - p_avg:+.4f} \\\\")
     comp += [r"\bottomrule\end{tabular}\end{table*}", r"\end{document}"]
 
-    (REPORT_DIR / "table4_repro.tex").write_text(PREAMBLE + "\n".join(body) + "\n\\end{document}\n")
-    (REPORT_DIR / "table4_compare.tex").write_text(PREAMBLE + "\n".join(comp))
+    (REPORT_DIR / "table4_repro.tex").write_text(
+        PREAMBLE + "\n".join(body) + "\n" + NOTES_BLOCK + "\n\\end{document}\n")
+    (REPORT_DIR / "table4_compare.tex").write_text(
+        PREAMBLE + "\n".join(comp).replace("\\end{document}", "") + "\n" + NOTES_BLOCK
+        + "\n\\end{document}\n")
 
     print(f"columns present: {n_cols}/8 ({', '.join(both)})")
     show = merged[["Model"] + [f"{c}_ours" for c in both]].copy()

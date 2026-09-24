@@ -14,7 +14,33 @@ Qwen3-VL-8B & 0.6003 & 0.7593 & 0.6214 & 0.3207 & 0.5005 & 0.7273 & 0.5883 \\
 \hspace{1.2em}$\Delta$ vs paper & +0.0468 & -0.1691 & -0.0786 & -0.4377 & -0.1401 & +0.0766 & -0.1170 \\
 Qwen3-VL-4B & 0.8238 & 0.8297 & 0.6824 & 0.8758 & 0.8820 & 0.5611 & 0.7758 \\
 \hspace{1.2em}$\Delta$ vs paper & +0.2536 & -0.0909 & +0.0319 & +0.1890 & +0.2717 & -0.1617 & +0.0823 \\
+SingGuard-4B & 0.9472 & 0.9071 & 0.7005 & 0.9712 & 0.7891 & 0.8427 & 0.8596 \\
+\hspace{1.2em}$\Delta$ vs paper & +0.0176 & -0.0623 & -0.0755 & +0.0179 & -0.0714 & +0.0090 & -0.0274 \\
 SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.9551 & 0.8653 & 0.8234 & 0.8691 \\
 \hspace{1.2em}$\Delta$ vs paper & +0.0025 & -0.0645 & -0.0795 & -0.0117 & -0.0159 & -0.0081 & -0.0295 \\
 \bottomrule\end{tabular}\end{table*}
+
+
+\section*{Notes}
+\begin{itemize}\itemsep2pt
+  \item \textbf{Configuration.} Released checkpoints; SingGuard rows use
+        \texttt{thinking\_type=fast} (the paper's Sec.~2.6 mode for high-throughput benchmark
+        evaluation), greedy decoding, \texttt{max\_model\_len}=32768.
+  \item \textbf{SPA-VL protocol.} The official test sets are EvalHarm (265) + EvalHelp (265);
+        their filenames are \emph{not} query-safety labels (EvalHelp measures helpfulness and
+        contains hate-annotated images; EvalHarm measures refusal behaviour). We map
+        harm$\rightarrow$unsafe / help$\rightarrow$safe, the reading most consistent with the
+        paper's numbers for this column; treat its absolute value as protocol-dependent.
+  \item \textbf{JailBreakV coverage.} HF hosts only $\sim$360 of the 28{,}000 images, so 662/1000
+        of our sampled rows run text-only. On the image-bearing subset (the benchmark's designed
+        form) SingGuard-8B scores F1 0.9600 vs the paper's 0.9728.
+  \item \textbf{Pending.} MMDS-Q/MMDS-R columns (data ready, runs in flight); baseline guards
+        (LLaVAShield-v1.0-7B, LlamaGuard3-Vision-11B, LlamaGuard4-12B, ShieldGemma-2-4B,
+        SafeGuard-VL-RL, GuardReasoner-VL-7B, LlavaGuard-v1.0-7B) are downloading.
+  \item \textbf{Qwen3-VL-235B} is not run: bf16 ($\sim$470\,GB) / FP8 ($\sim$235\,GB) does not fit
+        a shared 8$\times$A6000 node without multi-GPU tensor parallelism.
+  \item Baseline prompts are approximations (the paper publishes only SingGuard's templates);
+        per-column deltas for baseline rows are therefore indicative, not exact.
+\end{itemize}
+
 \end{document}

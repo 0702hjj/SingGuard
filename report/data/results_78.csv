@@ -29,3 +29,9 @@ ts,model,label,dataset,engine,unparsable,n_error,n_input_error,thinking,max_toke
 2026-09-24 00:30:58,qwen3-vl-4b,Qwen3-VL-4B,vlsbench,vllm,0,0,0,,512,,False,1000,1000,779,1.0,0.779,0.8758,0
 2026-09-24 00:32:36,qwen3-vl-4b,Qwen3-VL-4B,mm-safety,vllm,0,0,0,,512,,False,758,758,598,1.0,0.7889,0.882,0
 2026-09-24 00:36:02,qwen3-vl-4b,Qwen3-VL-4B,beavertails-v,vllm,0,0,0,,512,,False,1000,372,954,0.3899,1.0,0.5611,0
+2026-09-24 14:32:18,sing-guard-4b,SingGuard-4B,vlguard,vllm,0,0,0,fast,1024,,False,1000,442,430,0.9605,0.9344,0.9472,0
+2026-09-24 14:33:24,sing-guard-4b,SingGuard-4B,jailbreakv,vllm,0,0,0,fast,1024,,False,1000,1000,830,1.0,0.83,0.9071,0
+2026-09-24 14:34:00,sing-guard-4b,SingGuard-4B,spa-vl,vllm,0,0,0,fast,1024,,False,530,265,483,0.5424,0.9887,0.7005,0
+2026-09-24 14:36:56,sing-guard-4b,SingGuard-4B,vlsbench,vllm,0,0,0,fast,1024,,False,1000,1000,944,1.0,0.944,0.9712,0
+2026-09-24 14:38:51,sing-guard-4b,SingGuard-4B,mm-safety,vllm,0,0,0,fast,1024,,False,758,758,494,1.0,0.6517,0.7891,0
+2026-09-24 14:42:29,sing-guard-4b,SingGuard-4B,beavertails-v,vllm,0,0,0,fast,1024,,False,1000,372,378,0.836,0.8495,0.8427,0

@@ -96,6 +96,10 @@ class VLLMServer:
             "--gpu-memory-utilization", str(self.gpu_mem),
             "--max-num-seqs", str(self.max_num_seqs),   # cap concurrent seqs: mm-heavy prefill OOMs on shared GPUs
             "--trust-remote-code",
+            # vLLM 0.11's multimodal preprocessor cache can assert mid-run
+            # ("Expected a cached item for mm_hash=...") and kill the engine; the cache only
+            # helps with repeated identical images, which our benchmarks barely have.
+            "--disable-mm-preprocessor-cache",
         ]
         # SingGuard-style models ship the guard prompt as a standalone chat_template.jinja
         # (tokenizer_config.chat_template is empty). Older vLLM only reads the string field
