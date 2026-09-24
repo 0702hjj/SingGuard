@@ -183,7 +183,14 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
             return {"id": s["id"], "gold": s["label"], "pred": None,
                     "raw": f"<INPUT_ERROR {e}>"[:400],
                     "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs)}
-        extra = {"chat_template_kwargs": chat_template_kwargs} if chat_template_kwargs else {}
+        kw = dict(chat_template_kwargs or {})
+        try:
+            extra_kw = adapter.template_kwargs(s)
+            if extra_kw:
+                kw.update(extra_kw)
+        except Exception as e:  # noqa: BLE001
+            log.warning("template_kwargs failed for %s: %s", s["id"], e)
+        extra = {"chat_template_kwargs": kw} if kw else {}
         for attempt in range(retries):
             try:
                 async with sem:   # actually throttle client-side (was previously a no-op)

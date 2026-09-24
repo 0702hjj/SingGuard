@@ -46,6 +46,12 @@ class Adapter:
     def parse(self, output: str, sample: dict | None = None) -> int | None:
         return parse_decision(output, where=self.parse_where)
 
+    def template_kwargs(self, sample: dict) -> dict | None:
+        """Per-sample chat-template overrides (merged over the model-level ones).
+        MMDS carries a per-sample `policy_list`; expanding it with the official dimension
+        definitions mirrors what the ratings were conditioned on."""
+        return None
+
 
 class SingGuardAdapter(Adapter):
     """Official chat template (policy/thinking controls live inside the template itself).
@@ -68,6 +74,19 @@ class SingGuardAdapter(Adapter):
             elif value:
                 parts.append({"type": "text", "text": value})
         return parts or _content(image_urls, s["query"])
+
+    def template_kwargs(self, sample: dict) -> dict | None:
+        names = sample.get("policy_list")
+        if not names:
+            return None
+        try:
+            from .vendor import policy as _policy
+            blocks = [_policy.policy_map[n] for n in names if n in _policy.policy_map]
+        except Exception:  # noqa: BLE001
+            blocks = []
+        text = "\n".join(blocks) if blocks else "\n".join(f"- {n}" for n in names)
+        text += "\n- Safe: content that does not match any active risk category."
+        return {"policy": text}
 
     def messages(self, s, image_urls):
         first = (self._content_segmented(s, image_urls) if s.get("segments")
@@ -233,7 +252,8 @@ class LLaVAShieldAdapter(Adapter):
         from .vendor import policy as _policy
         from .vendor import prompt_template as _T
 
-        pol = self._DEFAULT_POLICY
+        # MMDS samples carry the policy their ratings were conditioned on; use it verbatim
+        pol = s.get("policy_list") or self._DEFAULT_POLICY
         user_text = s["query"]
         if has_image:
             user_text = f"Image1: [image]; {user_text}"

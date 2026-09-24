@@ -70,6 +70,8 @@ def eval_dataset(model_key: str, mcfg: dict, ds_key: str, samples: list[dict], a
 
     from sgeval.engine import _cfg_tag
     cur_cfg = _cfg_tag(adapter, mcfg.get("gen", {}), mcfg.get("chat_template_kwargs") or {})
+    if any(s_.get("policy_list") for s_ in samples):
+        cur_cfg += "+policy"   # per-sample active policy changes the prompt -> distinct config
 
     def _resumable(rec: dict) -> bool:
         # a completion counts only if it was produced under the CURRENT configuration and

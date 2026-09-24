@@ -412,7 +412,9 @@ def load_mmds(raw_dir: Path, key: str):
                 if cand.exists():
                     segments.append(["image", str(cand.relative_to(DATA_DIR))])
             segments.append(["text", txt + "\n"])
+        up = rec.get("usage_policy")
         base = {"image": imgs or None, "query": context, "segments": segments,
+                "policy_list": list(up) if isinstance(up, (list, tuple)) else None,
                 "src": f"mmds:{rec.get('id')}"}
         if rec.get("user_rating") in ("Safe", "Unsafe"):
             by_side["q"].append({**base, "response": None,
@@ -482,6 +484,8 @@ def write_split(rows: list[dict], out_dir: Path, key: str, sample: int, seed: in
             }
             if with_segments and r.get("segments"):
                 rec["segments"] = r["segments"]   # interleaved variant (MMDS A/B)
+            if r.get("policy_list"):
+                rec["policy_list"] = r["policy_list"]   # MMDS: per-sample active policy
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     manifest = {"dataset": key, "source_rows": len(rows), "sampled": len(picked),
                 "seed": seed, "n_unsafe": sum(r["label"] for r in picked),
