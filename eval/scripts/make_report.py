@@ -81,9 +81,27 @@ NOTES_BLOCK = r"""
   \item \textbf{JailBreakV coverage.} HF hosts only $\sim$360 of the 28{,}000 images, so 662/1000
         of our sampled rows run text-only. On the image-bearing subset (the benchmark's designed
         form) SingGuard-8B scores F1 0.9600 vs the paper's 0.9728.
-  \item \textbf{Pending.} MMDS-Q/MMDS-R columns (data ready, runs in flight); baseline guards
-        (LLaVAShield-v1.0-7B, LlamaGuard3-Vision-11B, LlamaGuard4-12B, ShieldGemma-2-4B,
-        SafeGuard-VL-RL, GuardReasoner-VL-7B, LlavaGuard-v1.0-7B) are downloading.
+  \item \textbf{MMDS protocol.} The corpus carries an official \texttt{set} field
+        (train 4045 / val 109 / test 330); we score the \emph{test} split, as the paper does.
+        Scoring a stratified sample of the whole corpus instead drops SingGuard-8B to
+        0.7722/0.7209 --- the earlier gap in this column was a sampling error on our side,
+        not a protocol or checkpoint difference.
+  \item \textbf{MM-Safety is all-unsafe.} The benchmark is a set of malicious instructions
+        (every sampled row is gold-unsafe), so its F1 reduces to a precision-weighted recall
+        on the attack set and is sensitive to which attacks are sampled.
+  \item \textbf{Baseline harness fidelity.} Each baseline is driven through its own
+        released prompt/template, not a common one. Two defects found and fixed this way:
+        LlavaGuard's template ships as \texttt{chat\_template.json} with no inline copy, so
+        vLLM silently substituted a generic template and the model returned JSON missing its
+        leading keys on 26\% of samples; and GuardReasoner-VL's official interface (INSTRUCTION
+        as a system message, a \texttt{Human user:/AI assistant:} transcript, verdict in a
+        \texttt{<result>} block) differs from a plain chat call. Baseline prompts are still
+        approximations in general --- the paper publishes only SingGuard's templates --- so
+        their per-column deltas are indicative, not exact.
+  \item \textbf{Still missing.} LlamaGuard3-Vision-11B and LlamaGuard4-12B rows (queued);
+        LLaVAShield-v1.0-7B ships a LLaVA-NeXT training-format checkpoint
+        (\texttt{LlavaQwenForCausalLM}, no \texttt{auto\_map}) that neither vLLM 0.11 nor
+        transformers loads directly --- a converted copy is being validated.
   \item \textbf{Qwen3-VL-235B} is not run: bf16 ($\sim$470\,GB) / FP8 ($\sim$235\,GB) does not fit
         a shared 8$\times$A6000 node without multi-GPU tensor parallelism.
   \item Baseline prompts are approximations (the paper publishes only SingGuard's templates);
@@ -130,7 +148,7 @@ def write_documents(df: pd.DataFrame, paper: pd.DataFrame, labels: dict) -> None
         r"reproduced score and, beneath it, $\Delta$ = ours $-$ paper. The Avg column averages "
         r"over the " + f"{len(both)}/8" + r" columns present on both sides.}",
         r"\label{tab:table4-compare}",
-        r"\begin{tabular}{l" + "c" * len(both) + "c}\toprule",
+        r"\begin{tabular}{l" + "c" * len(both) + r"c}\toprule",
         "Model & " + " & ".join(both) + r" & Avg \\\midrule",
     ]
     for _, r in merged.iterrows():

@@ -12,9 +12,11 @@
 Model & VLGuard & JailBreakV & SPA-VL & MMDS-Q & MMDS-R & VLSBench & MM-Safety & BeaverTails-V & Avg \\\midrule
 Qwen3-VL-8B & 0.6003 & 0.7593 & 0.6214 & -- & -- & 0.3207 & 0.5005 & 0.7273 & 0.5882 \\
 Qwen3-VL-4B & 0.8238 & 0.8297 & 0.6824 & -- & -- & 0.8758 & 0.8820 & 0.5611 & 0.7758 \\
-SingGuard-2B & 0.9549 & 0.9154 & 0.6960 & 0.7553 & 0.7285 & 0.9889 & 0.9530 & 0.8071 & 0.8499 \\
-SingGuard-4B & 0.9472 & 0.9071 & 0.7005 & 0.7728 & 0.7377 & 0.9712 & 0.7891 & 0.8427 & 0.8335 \\
-SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.7722 & 0.7209 & 0.9551 & 0.8653 & 0.8234 & 0.8385 \\
+LlavaGuard & 0.4290 & 0.4756 & -- & -- & -- & -- & -- & -- & 0.4523 \\
+GuardReasoner-VL-7B & 0.8822 & 0.9005 & 0.6541 & -- & -- & 0.6130 & 0.6318 & 0.5149 & 0.6994 \\
+SingGuard-2B & 0.9549 & 0.9154 & 0.6960 & 0.9379 & 0.9291 & 0.9889 & 0.9530 & 0.8071 & 0.8978 \\
+SingGuard-4B & 0.9472 & 0.9071 & 0.7005 & 0.9032 & 0.9046 & 0.9712 & 0.7891 & 0.8427 & 0.8707 \\
+SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.9571 & 0.8908 & 0.9551 & 0.8653 & 0.8234 & 0.8828 \\
 \bottomrule\end{tabular}\end{table*}
 
 \section*{Notes}
@@ -30,9 +32,27 @@ SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.7722 & 0.7209 & 0.9551 & 0.8653 & 0.
   \item \textbf{JailBreakV coverage.} HF hosts only $\sim$360 of the 28{,}000 images, so 662/1000
         of our sampled rows run text-only. On the image-bearing subset (the benchmark's designed
         form) SingGuard-8B scores F1 0.9600 vs the paper's 0.9728.
-  \item \textbf{Pending.} MMDS-Q/MMDS-R columns (data ready, runs in flight); baseline guards
-        (LLaVAShield-v1.0-7B, LlamaGuard3-Vision-11B, LlamaGuard4-12B, ShieldGemma-2-4B,
-        SafeGuard-VL-RL, GuardReasoner-VL-7B, LlavaGuard-v1.0-7B) are downloading.
+  \item \textbf{MMDS protocol.} The corpus carries an official \texttt{set} field
+        (train 4045 / val 109 / test 330); we score the \emph{test} split, as the paper does.
+        Scoring a stratified sample of the whole corpus instead drops SingGuard-8B to
+        0.7722/0.7209 --- the earlier gap in this column was a sampling error on our side,
+        not a protocol or checkpoint difference.
+  \item \textbf{MM-Safety is all-unsafe.} The benchmark is a set of malicious instructions
+        (every sampled row is gold-unsafe), so its F1 reduces to a precision-weighted recall
+        on the attack set and is sensitive to which attacks are sampled.
+  \item \textbf{Baseline harness fidelity.} Each baseline is driven through its own
+        released prompt/template, not a common one. Two defects found and fixed this way:
+        LlavaGuard's template ships as \texttt{chat\_template.json} with no inline copy, so
+        vLLM silently substituted a generic template and the model returned JSON missing its
+        leading keys on 26\% of samples; and GuardReasoner-VL's official interface (INSTRUCTION
+        as a system message, a \texttt{Human user:/AI assistant:} transcript, verdict in a
+        \texttt{<result>} block) differs from a plain chat call. Baseline prompts are still
+        approximations in general --- the paper publishes only SingGuard's templates --- so
+        their per-column deltas are indicative, not exact.
+  \item \textbf{Still missing.} LlamaGuard3-Vision-11B and LlamaGuard4-12B rows (queued);
+        LLaVAShield-v1.0-7B ships a LLaVA-NeXT training-format checkpoint
+        (\texttt{LlavaQwenForCausalLM}, no \texttt{auto\_map}) that neither vLLM 0.11 nor
+        transformers loads directly --- a converted copy is being validated.
   \item \textbf{Qwen3-VL-235B} is not run: bf16 ($\sim$470\,GB) / FP8 ($\sim$235\,GB) does not fit
         a shared 8$\times$A6000 node without multi-GPU tensor parallelism.
   \item Baseline prompts are approximations (the paper publishes only SingGuard's templates);
