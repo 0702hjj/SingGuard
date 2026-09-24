@@ -115,11 +115,36 @@ class GenericVLMGuardAdapter(Adapter):
 
 
 class GuardReasonerAdapter(Adapter):
-    """GuardReasoner-VL (yueliu1999/GuardReasoner-VL-7B). Reasoning guard: rationale first,
-    verdict last -> parse the last safe/unsafe occurrence."""
+    """GuardReasoner-VL (yueliu1999/GuardReasoner-VL-7B). Reasoning guard that emits
+    <think>...</think> then a verdict block:
+
+        <result>Request: unharmful
+        Response: unharmful</result>
+
+    The vocabulary is harmful/unharmful (mixed with safe/unsafe), and the role-specific
+    field matters, so parsing is done on the <result> block rather than the last
+    safe/unsafe token (which failed on 50%+ of rows)."""
 
     name = "guardreasoner"
     parse_where = "last_match"
+
+    def parse(self, output: str, sample: dict | None = None) -> int | None:
+        m = re.search(r"<result>(.*?)</result>", output or "", re.DOTALL)
+        if m:
+            block = m.group(1)
+            field = "response" if (sample and sample.get("response")) else "request"
+            line = next((l for l in block.splitlines()
+                         if l.strip().lower().startswith(field)), None)
+            low = (line or block).lower()
+            if "unharmful" in low:
+                return 0
+            if "harmful" in low:      # plain harmful (unharmful handled above)
+                return 1
+            if "unsafe" in low:
+                return 1
+            if "safe" in low:
+                return 0
+        return parse_decision(output, where="last_match")
 
     def messages(self, s, image_urls):
         target = s["query"] if not s.get("response") else (

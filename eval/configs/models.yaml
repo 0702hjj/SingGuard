@@ -82,7 +82,7 @@ guardreasoner-vl-7b:
   hf_id: yueliu1999/GuardReasoner-VL-7B
   path: models/guardreasoner-vl-7b
   max_model_len: 32768
-  gen: {temperature: 0.0, max_tokens: 512}      # reasoning model: longer output, parse the final verdict
+  gen: {temperature: 0.0, max_tokens: 1024}     # reasoning model: needs room for <think> + <result>
 
 llavaguard-7b:
   <<: *defaults
