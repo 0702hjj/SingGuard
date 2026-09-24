@@ -52,31 +52,107 @@ beavertails-v:
   hf_id: PKU-Alignment/BeaverTails-V
   loader: beavertailsv
 
-# MMDS (Huang et al. 2025) is public since 2026-03: hf dataset leost233/MMDS
-# (mmds.jsonl + images.zip). Per-role ratings split into MMDS-Q (user side) and
-# MMDS-R (assistant side); the loader emits both test sets from one run.
+# MMDS (Huang et al. 2025): hf dataset leost233/MMDS. Per-role ratings split into
+# MMDS-Q (user side) and MMDS-R (assistant side). The corpus carries an official `set`
+# field (train 4045 / val 109 / test 330) and the paper scores the test split, so these
+# keys filter to it: 330 rows for Q, 327 for R, no sampling (see the loader note below).
 mmds-q:
   <<: *defaults
   label: MMDS-Q
   hf_id: leost233/MMDS
   loader: mmds
+  split: test
+  mmds_side: q
+  mmds_variant: flat
+  id_prefix: mmdsqt
 
 mmds-r:
   <<: *defaults
   label: MMDS-R
   hf_id: leost233/MMDS
   loader: mmds
+  split: test
+  mmds_side: r
+  mmds_variant: flat
+  id_prefix: mmdsrt
 
-# Interleaved-variant A/B: same dialogue/ids/labels as mmds-q|r, but images sit at their
-# turn positions (see sgeval.adapters.SingGuardAdapter._content_segmented).
-mmds-q-int:
+# Side-aware assembly (Q judges the user turns alone; R judges all assistant turns given
+# the user turns). Tested as an alternative reading of the per-role ratings; the paper's
+# numbers sit closer to the flat form above, so these are A/B keys, not the scored columns.
+mmds-q2:
   <<: *defaults
-  label: MMDS-Q-INT
+  label: MMDS-Q2
   hf_id: leost233/MMDS
   loader: mmds
+  split: test
+  mmds_side: q
+  mmds_variant: side
+  id_prefix: mmdsqt2
 
-mmds-r-int:
+mmds-r2:
   <<: *defaults
-  label: MMDS-R-INT
+  label: MMDS-R2
   hf_id: leost233/MMDS
   loader: mmds
+  split: test
+  mmds_side: r
+  mmds_variant: side
+  id_prefix: mmdsrt2
+
+# A/B archive, superseded and NOT part of the table: the same corpus with no split filter
+# (1,000-row stratified sample of all 4,484 dialogues, ~93% train). This is what produced
+# the spurious ~0.77 MMDS cells; kept runnable so the protocol study reproduces.
+# Frozen runs live in results/preds/*__mmds-{q,r}{,-int,2,2-int}-pool.jsonl.
+mmds-q-pool:
+  <<: *defaults
+  label: MMDS-Q-pool
+  hf_id: leost233/MMDS
+  loader: mmds
+  mmds_side: q
+  mmds_variant: flat
+  id_prefix: mmdsq
+
+mmds-r-pool:
+  <<: *defaults
+  label: MMDS-R-pool
+  hf_id: leost233/MMDS
+  loader: mmds
+  mmds_side: r
+  mmds_variant: flat
+  id_prefix: mmdsr
+
+mmds-q-pool-int:
+  <<: *defaults
+  label: MMDS-Q-pool-int
+  hf_id: leost233/MMDS
+  loader: mmds
+  mmds_side: q
+  mmds_variant: flat-int
+  id_prefix: mmdsq
+
+mmds-r-pool-int:
+  <<: *defaults
+  label: MMDS-R-pool-int
+  hf_id: leost233/MMDS
+  loader: mmds
+  mmds_side: r
+  mmds_variant: flat-int
+  id_prefix: mmdsr
+
+mmds-q-pool2:
+  <<: *defaults
+  label: MMDS-Q-pool2
+  hf_id: leost233/MMDS
+  loader: mmds
+  mmds_side: q
+  mmds_variant: side
+  id_prefix: mmdsq
+
+mmds-r-pool2:
+  <<: *defaults
+  label: MMDS-R-pool2
+  hf_id: leost233/MMDS
+  loader: mmds
+  mmds_side: r
+  mmds_variant: side
+  id_prefix: mmdsr

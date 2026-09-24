@@ -354,7 +354,8 @@ def load_beavertailsv(raw_dir: Path, key: str):
     return out
 
 
-def load_mmds(raw_dir: Path, key: str):
+def load_mmds(raw_dir: Path, key: str, split: str | None = None,
+              side: str | None = None, variant: str | None = None):
     """MMDS (leost233/MMDS): 4,484 multimodal multi-turn dialogues with per-role ratings.
     user_rating -> MMDS-Q (query side); assistant_rating -> MMDS-R (response side) -- the
     paper's explicit split so "intent and assistance are scored separately".
@@ -362,7 +363,12 @@ def load_mmds(raw_dir: Path, key: str):
     Mapping to our (query, image, response) triple: query = the dialogue context (all turns
     except the final assistant turn, labelled [user]:/[assistant]:); images = every image
     referenced by the dialogue, in order; response = the final assistant turn (R side only).
-    Rows whose rating for the scored side is "null" are skipped (role absent)."""
+    Rows whose rating for the scored side is "null" are skipped (role absent).
+
+    The corpus carries an official `set` field (train 4045 / val 109 / test 330); the paper
+    scores the test split. Pass `split` to restrict to it. With `side`+`variant` the loader
+    returns that single pool as a flat list (key-driven form used for the test-split runs)
+    instead of the legacy dict of all four pools."""
     import zipfile
 
     jf = raw_dir / "mmds.jsonl"
@@ -389,8 +395,12 @@ def load_mmds(raw_dir: Path, key: str):
             return [str(x) for x in (v2 if isinstance(v2, list) else [v2])]
         return []
 
-    by_side: dict[str, list] = {"q": [], "r": []}
+    by_side: dict[str, list] = {"q": [], "r": [], "q2": [], "r2": []}
+    n_seen = 0
     for rec in (json.loads(l) for l in jf.open() if l.strip()):
+        n_seen += 1
+        if split and rec.get("set") != split:
+            continue
         conv = rec.get("conversations") or []
         if not conv:
             continue
@@ -416,14 +426,48 @@ def load_mmds(raw_dir: Path, key: str):
         base = {"image": imgs or None, "query": context, "segments": segments,
                 "policy_list": list(up) if isinstance(up, (list, tuple)) else None,
                 "src": f"mmds:{rec.get('id')}"}
+        # side-aware variant: Q judges the user turns only; R judges the assistant side
+        # (all assistant turns) given the user turns as context -- matching the dataset's
+        # per-role rating semantics (assistant_rating covers the accumulated responses)
+        user_txt = "\n".join(f'[user]: {t.get("content", "")}'.strip()
+                             for t in conv if t.get("role") == "user")
+        asst_txt = "\n".join(f'[assistant]: {t.get("content", "")}'.strip()
+                              for t in conv if t.get("role") == "assistant")
+        segs2 = []
+        for t in conv:
+            if t.get("role") != "user":
+                continue
+            for pth in img_list(t):
+                cand = raw_dir / pth
+                if cand.exists():
+                    segs2.append(["image", str(cand.relative_to(DATA_DIR))])
+            segs2.append(["text", f'[user]: {t.get("content", "")}\n'])
+        base2 = {"image": imgs or None, "query": user_txt, "segments": segs2,
+                 "policy_list": list(up) if isinstance(up, (list, tuple)) else None,
+                 "src": f"mmds:{rec.get('id')}"}
+        if rec.get("user_rating") in ("Safe", "Unsafe"):
+            by_side["q2"].append({**base2, "response": None,
+                                  "label": 0 if rec["user_rating"] == "Safe" else 1})
+        if asst_txt and rec.get("assistant_rating") in ("Safe", "Unsafe"):
+            by_side["r2"].append({**base2, "response": asst_txt,
+                                  "label": 0 if rec["assistant_rating"] == "Safe" else 1})
+
         if rec.get("user_rating") in ("Safe", "Unsafe"):
             by_side["q"].append({**base, "response": None,
                                  "label": 0 if rec["user_rating"] == "Safe" else 1})
         if last_asst and rec.get("assistant_rating") in ("Safe", "Unsafe"):
             by_side["r"].append({**base, "response": str(last_asst),
                                  "label": 0 if rec["assistant_rating"] == "Safe" else 1})
-    print(f"  [note] MMDS: Q pool={len(by_side['q'])} R pool={len(by_side['r'])}")
-    return {"q": by_side["q"], "r": by_side["r"]}
+    print(f"  [note] MMDS: read {n_seen} rows"
+          + (f", kept set={split!r} ({sum(len(v) for v in by_side.values())} pool rows)"
+             if split else "")
+          + f"; Q pool={len(by_side['q'])} R pool={len(by_side['r'])} "
+            f"q2={len(by_side['q2'])} r2={len(by_side['r2'])}")
+    if side and variant:
+        pool = side + ("2" if variant == "side" else "")
+        print(f"  [note] MMDS selected side={side} variant={variant}: n={len(by_side[pool])}")
+        return by_side[pool]
+    return {"q": by_side["q"], "r": by_side["r"], "q2": by_side["q2"], "r2": by_side["r2"]}
 
 
 LOADERS = {
@@ -515,16 +559,32 @@ def main() -> int:
     rc = 0
     for k in keys:
         c = cfg[k]
-        if k == "mmds-r":        # handled together with mmds-q (manual loader writes both)
+        if k == "mmds-r" and not c.get("mmds_variant"):
+            continue            # legacy paired form: mmds-q writes both sides in one pass
             continue
         sample = args.sample if args.sample is not None else c.get("sample", 1000)
         seed = args.seed if args.seed is not None else c.get("seed", 42)
         raw_dir = DATA_DIR / "raw" / k
         if c.get("loader") == "mmds":
-            raw_dir = DATA_DIR / "raw" / "mmds"   # both mmds-q and mmds-r share one raw tree
+            raw_dir = DATA_DIR / "raw" / "mmds"   # all mmds keys share one raw tree
+            if c.get("mmds_variant"):
+                # Key-driven single-output form: one dataset key -> one directory (its own
+                # id prefix), so the official test-split runs cannot collide with the
+                # whole-pool A/B files already under data/mmds-*.
+                rows = load_mmds(raw_dir, k, split=c.get("split"),
+                                 side=c["mmds_side"], variant=c["mmds_variant"]) or []
+                write_split(rows, DATA_DIR / k, k, sample, seed, c["id_prefix"],
+                            with_segments=c["mmds_variant"].endswith("-int"))
+                continue
             sides = load_mmds(raw_dir, k) or {}
             if "q" in sides:
                 write_split(sides["q"], DATA_DIR / "mmds-q", "mmds-q", sample, seed, "mmdsq")
+                write_split(sides.get("q2", []), DATA_DIR / "mmds-q2", "mmds-q2", sample, seed, "mmdsq")
+                write_split(sides.get("r2", []), DATA_DIR / "mmds-r2", "mmds-r2", sample, seed, "mmdsr")
+                write_split(sides.get("q2", []), DATA_DIR / "mmds-q2-int", "mmds-q2-int", sample, seed,
+                            "mmdsq", with_segments=True)
+                write_split(sides.get("r2", []), DATA_DIR / "mmds-r2-int", "mmds-r2-int", sample, seed,
+                            "mmdsr", with_segments=True)
                 write_split(sides["r"], DATA_DIR / "mmds-r", "mmds-r", sample, seed, "mmdsr")
                 write_split(sides["q"], DATA_DIR / "mmds-q-int", "mmds-q-int", sample, seed, "mmdsq",
                             with_segments=True)
