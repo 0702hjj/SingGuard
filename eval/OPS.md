@@ -162,3 +162,72 @@ Table 12 显示模式/配置差异只值 ~1 个点。→ 结论：Table 4 的绝
 **待全量确认的剩余偏差**：query-side 修复后，复现值与论文报告仍可能有余量（如 8B
 VLGuard 论文 0.9511）——baseline 提示词未公开、子采样口径未知、checkpoint 行为差异都是
 来源，报告中需逐列如实记录 Δ。
+
+> **2026-09-24 订正**：上面"绝对值不可用发布权重复现"的结论**已被证伪**。补上 MMDS
+> 的正确口径后，8B 全 8 列 Avg 0.8828（论文 0.9092，Δ −0.026）、2B 0.8978（Δ +0.005），
+> 9 列中 7 列 |Δ| ≤ 0.03。当时的"两个尺寸都不匹配"里有很大一块其实是 MMDS 采样错误
+> （见 §6.1）拉低了均值。剩余缺口集中在 SPA-VL（−0.08，协议歧义）与 JailBreakV
+> （−0.064，图像只有 360/28000）两列，均已单独归因。
+
+## 6. 2026-09-24 复盘：四个静默污染数据的 bug
+
+共同特征：**都不报错、都不影响其它列、都只能靠交叉验证发现**。报告数字若与此前不一致，
+先怀疑这四条。
+
+### 6.1 MMDS 必须用官方 test split（影响最大）
+
+- 语料 `mmds.jsonl` 自带官方 `set` 字段：**train 4045 / val 109 / test 330**，论文评的是 test。
+- 旧 loader 完全忽略该字段，从全量 4,484 条分层采样 1,000 → **约 93% 是训练集**，
+  且标签分布不同（全量池 31% unsafe，test split 52%）。
+- 后果：同一模型、同一 harness，**MMDS-Q 0.7722 → 0.9571**（8B；论文 0.9851），
+  MMDS-R 0.7209 → 0.8908（论文 0.8963）。
+- 教训：数据集自带 split 字段时**先查 `set`/`split` 列**，不要假定全量池即评测集。
+- 归档：全量池版本仍可跑，键名降级为 `mmds-*-pool`，预测留在 `*__mmds-*-pool.jsonl`。
+
+### 6.2 每个模型必须喂它自己的 chat template
+
+- vLLM 只读 `tokenizer_config.json` 的内联 `chat_template` 或显式 `--chat-template`，
+  否则**静默替换成通用后备模板**。两种发布惯例把真模板放在别处：
+  `chat_template.jinja`（SingGuard/LlamaGuard4/SafeGuard-VL，vLLM 不自动读）与
+  `chat_template.json`（LLaVA-NeXT 系）。
+- 中招者：**LlavaGuard**（只有 `chat_template.json` 且无内联）→ 26% 样本返回
+  **缺失开头键的 JSON 残片**（如 ` The image violates category: "Safe" ... "}`）。
+- 修法：`sgeval.engine.resolve_chat_template` 依次解析 .jinja / .json，并把模板哈希并入
+  cfg 指纹（有内联模板的模型短路返回空指纹，保证既有 tag 逐字节不变、不误触发重跑）。
+
+### 6.3 基线要用它自己发布的 prompt（三次踩同一个坑）
+
+同一个教训在三个模型上各犯一次，都是"我们自造提示词 → 输出格式不对 → 解析失败记错"：
+
+| 模型 | 我们的错误做法 | 官方实际要求 |
+|---|---|---|
+| GuardReasoner-VL | 自造 instruction 放 user 消息 | **system message** 装 INSTRUCTION + `Human user:\n<image>\n{query}\n\nAI assistant:\n{response}` 转录；结论在 `<result>` 块，词汇是 harmful/unharmful |
+| LlavaGuard | 自造 "answer with predicted_label" | 5.4KB 的 **O1–O9 政策全文**（Should not/Can 条目 + assessment steps + JSON 模板），判决键是 **`rating`** |
+| LLaVAShield | （已正确）| 官方 prompt 组装已 vendored |
+
+- 修法：模板/prompt **逐字 vendored 进 `sgeval/vendor/`**，不要手抄、不要"condensed"。
+- GuardReasoner 修复后 unparsable 496–568/1000 → **0**，VLGuard 0.2973 → 0.8822。
+- 配套机制：`Adapter.version` 并入 cfg 指纹（默认空 → 不破坏既有 tag）。**改 prompt
+  就是换了一个问题**，必须让该模型的缓存失效，否则会拿旧答案冒充新结果。
+
+### 6.4 `recompute.py` 的列错位
+
+`DictWriter(fieldnames=list(rows_out[0]))` 用了**新行的键序**，而 results.csv 已有自己的
+表头 → 追加的整行**错位**：F1 落进 `n`、gold 计数落进 `thinking`/`max_tokens`，真正的
+`f1` 为空。报告随后按 ts 取"最新行"，于是静默退回到**被淘汰的旧 MMDS 数字**。
+修法：追加前先从文件读表头。
+
+### 6.5 其它
+
+- **`\toprule` 转义**：`"c}\toprule"` 非 raw string → `\t` 变真 TAB →
+  `table4_compare.tex` 一直编译不过。生成 LaTeX 的字符串一律用 raw。
+- **GPU 抢占**：`.79` 的 GPU3 在一次检查间隔内被别的用户占满（15MiB → 39GB/92%）。
+  申请 GPU 前**重新查一次**，并用保守 `--gpu-util` 给邻居留余量。
+- **跨机传输**：`.79 → .78` 无 SSH 通道（Permission denied, publickey）。**不要经本机中转**
+  （~5.6MB/s 且依赖本地机器在线）——两台机器各自都能连 hf-mirror/ModelScope，**让目标机自己下**。
+- **上下文上限要按 checkpoint 自己的 config 定**：LLaVAShield 的 16K 是
+  `tokenizer_model_max_length`（分词器设置），`max_position_embeddings` 才是 32768。
+  按 16K 跑会让 **103/330 条 MMDS-Q 提示（全是 unsafe 标签，占 unsafe 的 61%）**被 400 拒绝
+  并记错——恰好压掉该列要测的召回。
+- **vLLM `device_map="auto"`** 需要 `accelerate`（离线环境没有）→ 分类器路径改用
+  `.to("cuda")`。
