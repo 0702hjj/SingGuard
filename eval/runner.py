@@ -243,13 +243,18 @@ def main() -> int:
             # is a shim carrying the endpoint, model id, and where to read the key from.
             # The key is NEVER logged and never taken from the command line (shared box:
             # `ps` shows every user's argv).
-            key_env = mcfg.get("api_key_env", "DASHSCOPE_API_KEY")
-            key = os.environ.get(key_env, "")
-            if not key:
-                print(f"[skip] {mk}: ${key_env} is not set in this environment "
-                      f"(source your secrets file before launching)", file=sys.stderr)
-                rc = 1
-                continue
+            key_env = mcfg.get("api_key_env")
+            if key_env is None:
+                # No key configured: the endpoint is a local server (llama-server), which
+                # ignores the credential. Matches the local-vLLM path's "EMPTY".
+                key = "EMPTY"
+            else:
+                key = os.environ.get(key_env, "")
+                if not key:
+                    print(f"[skip] {mk}: ${key_env} is not set in this environment "
+                          f"(source your secrets file before launching)", file=sys.stderr)
+                    rc = 1
+                    continue
             server = ApiEndpoint(base_url=mcfg["base_url"], api_model=mcfg["api_model"],
                                  api_key=key, rpm=float(mcfg.get("rpm", 60)))
             args._server = server

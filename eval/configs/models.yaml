@@ -191,3 +191,20 @@ qwen3-vl-235b-api:
   gen: {temperature: 0.0, max_tokens: 512}
   # No chat_template_kwargs: that knob drives our *local* template, and sending it to a
   # hosted endpoint risks a 400 for an unsupported field.
+
+qwen3-vl-235b-gguf:
+  <<: *defaults
+  label: Qwen3-VL-235B
+  # Local llama.cpp serving the Q4_K_M GGUF. Chosen because the FP8 checkpoint needs 8 GPUs
+  # on one node (64 attention heads -> world size must divide 64) and the inter-node link is
+  # 1 GbE with no RDMA. This path needs no cross-node traffic at all.
+  # CAVEAT for the report: 4-bit quantisation is NOT the paper's configuration (bf16/FP8);
+  # treat this row as indicative only.
+  engine: openai_compatible
+  adapter: generic_vlm_guard
+  base_url: http://127.0.0.1:8291/v1        # llama-server, started separately
+  api_model: local                          # llama-server ignores the name
+  # no api_key_env: local server, no credential
+  # no rpm: single local process, no provider quota -- the limiter stays off
+  max_model_len: 32768
+  gen: {temperature: 0.0, max_tokens: 512}
