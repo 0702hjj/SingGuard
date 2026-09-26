@@ -132,8 +132,10 @@ NOTES_BLOCK = r"""
   \item \textbf{JailBreakV 覆盖率.} HF 上仅有约 360 张（共 28{,}000 张）图像，
         因此我们采样的 1000 行中有 662 行为纯文本。在带图像子集（该基准的设计形态）上，
         SingGuard-8B 的 F1 为 0.9600，论文为 0.9728。
-  \item \textbf{MM-Safety 全为 unsafe.} 该基准由恶意指令构成（我们采样的每一行 gold 均为
-        unsafe），因此其 F1 退化为攻击集上的加权召回，对采样到哪些攻击敏感。
+  \item \textbf{有三列全为 unsafe，其 F1 实际只是召回率.} JailBreakV、VLSBench、MM-Safety
+        在采样到的每一行 gold 均为 unsafe（攻击基准的设计如此）。没有负例则 FP 恒为 0、
+        precision 恒为 1，于是 $F1 = 2R/(1+R)$------**这三列度量的是召回，不是综合判别力**，
+        读表时不应与其余列等同看待。它们对"采样到哪些攻击"也格外敏感。
   \item \textbf{基线实现保真度.} 每条基线都走其自身发布的 prompt/模板，而非统一模板。
         由此发现并修复了两处缺陷：LlavaGuard 的模板以 \texttt{chat\_template.json} 形式发布
         且 \texttt{tokenizer\_config} 中没有内联副本，导致 vLLM 静默改用通用模板，
@@ -155,10 +157,13 @@ NOTES_BLOCK = r"""
         实际只有 49/330（Q）与 54/327（R）行能被装下，其余被 vLLM 以 400 拒绝。在 15\%
         覆盖率上算出的 F1（0.0186 / 0.0000）是上下文上限的度量，不是模型判断力的度量，
         因此留空------论文该列为 0.6800 / 0.6972，说明其评测做了截断或不同的输入组装。
-  \item \textbf{Qwen3-VL-235B.} 未跑完：它在 ModelScope 上只有 FP8 版（权重 221.3 GiB）。
-        该模型有 64 个注意力头，tensor-parallel 世界大小必须整除 64------**5 卡不是合法分片数**，
-        而 4 卡 ×48 GiB = 192 GiB 装不下权重，**唯一可行配置是单节点 8 卡**。权重已开始在
-        闲置节点上预下载，一旦凑够 8 张空闲卡即自动以 TP=8 启动（\texttt{logs/qwen235b.log}）。
+  \item \textbf{Qwen3-VL-235B 走 llama.cpp 量化路线.} 该模型只有 FP8 版开放权重（221.3 GiB），
+        且它有 64 个注意力头------tensor-parallel 的世界大小必须整除 64，**5 卡不是合法分片数**，
+        单节点 8 卡才是唯一本地配置。实测两节点之间**无任何 RDMA 硬件、无 NVLink、链路仅
+        1 GbE（87.4 MB/s）**，跨节点 TP=8 约 2 tok/s，不可行。最终改用 \textbf{llama.cpp +
+        GGUF Q4\_K\_M（142 GB）+ MoE 专家卸载到节点内存}的单节点方案（该节点有 455 GB 空闲内存）。
+        \textbf{注意：4bit 量化不是论文的 bf16/FP8 配置，此行的绝对值仅供参考趋势，
+        不可与其余行等同对比。}
   \item \textbf{评测口径.} 全部基线均使用各自发布的 prompt/模板（非统一模板），
         但仍属近似------论文只公布了 SingGuard 的模板------故基线行的逐列 $\Delta$ 供参考。
   \item \textbf{ShieldGemma-2 是纯图像分类器}，无图的行直接跳过，故其 JailBreakV 一列
