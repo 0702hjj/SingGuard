@@ -49,6 +49,10 @@ PREAMBLE = r"""\documentclass[10pt]{article}
 \usepackage[table]{xcolor}
 \definecolor{rowbg}{gray}{0.93}
 \definecolor{headbg}{gray}{0.85}
+% Delta text colours. Deliberately dark: they sit on the tinted delta rows, where a bright
+% green/red would lose contrast.
+\definecolor{posdelta}{RGB}{0,110,60}
+\definecolor{negdelta}{RGB}{170,25,25}
 \usepackage{geometry}
 \geometry{margin=1.6cm, landscape}
 \usepackage{caption}
@@ -67,6 +71,19 @@ def tex_escape(s: str) -> str:
 
 def fmt(v) -> str:
     return "--" if pd.isna(v) else f"{v:.4f}"
+
+
+def fmt_delta(v) -> str:
+    """A delta, coloured by sign: green above the paper, red below. Higher F1 is better,
+    so the sign is the whole story and the colour saves reading the number."""
+    if pd.isna(v):
+        return "--"
+    s = f"{v:+.4f}"
+    if v > 0:
+        return r"\textcolor{posdelta}{" + s + "}"
+    if v < 0:
+        return r"\textcolor{negdelta}{" + s + "}"
+    return s
 
 
 # Cells where coverage is too low to be a measurement rather than a probe of the model's
@@ -195,14 +212,14 @@ def write_documents(df: pd.DataFrame, paper: pd.DataFrame, labels: dict) -> None
     for mi, (_, r) in enumerate(merged.iterrows()):
         ours = " & ".join(fmt(r[f"{c}_ours"]) for c in both)
         deltas = " & ".join(
-            "--" if (pd.isna(r[f"{c}_ours"]) or pd.isna(r[f"{c}_paper"]))
-            else f"{r[f'{c}_ours'] - r[f'{c}_paper']:+.4f}" for c in both)
+            fmt_delta(None if (pd.isna(r[f"{c}_ours"]) or pd.isna(r[f"{c}_paper"]))
+                      else r[f"{c}_ours"] - r[f"{c}_paper"]) for c in both)
         o_avg = merged.loc[merged["Model"] == r["Model"], [f"{c}_ours" for c in both]].iloc[0].mean()
         p_avg = merged.loc[merged["Model"] == r["Model"], [f"{c}_paper" for c in both]].iloc[0].mean()
         comp.append(f"{tex_escape(str(r['Model']))} & " + ours + f" & {o_avg:.4f} \\\\")
         # shade every delta row: the pair (score, delta) then reads as one unit
         comp.append(r"\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & " + deltas
-                    + f" & {o_avg - p_avg:+.4f} \\\\")
+                    + " & " + fmt_delta(o_avg - p_avg) + r" \\")
     comp += [r"\bottomrule\end{tabular}\end{table*}", r"\end{document}"]
 
     (REPORT_DIR / "table4_repro.tex").write_text(

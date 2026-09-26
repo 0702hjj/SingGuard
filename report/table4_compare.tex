@@ -16,6 +16,10 @@
 \usepackage[table]{xcolor}
 \definecolor{rowbg}{gray}{0.93}
 \definecolor{headbg}{gray}{0.85}
+% Delta text colours. Deliberately dark: they sit on the tinted delta rows, where a bright
+% green/red would lose contrast.
+\definecolor{posdelta}{RGB}{0,110,60}
+\definecolor{negdelta}{RGB}{170,25,25}
 \usepackage{geometry}
 \geometry{margin=1.6cm, landscape}
 \usepackage{caption}
@@ -29,25 +33,25 @@
 \begin{tabular}{lccccccccc}\toprule
 \rowcolor{headbg} 模型 & VLGuard & JailBreakV & SPA-VL & MMDS-Q & MMDS-R & VLSBench & MM-Safety & BeaverTails-V & 平均 \\\midrule
 Qwen3-VL-8B & 0.6003 & 0.7593 & 0.6214 & 0.5532 & 0.6567 & 0.3207 & 0.5005 & 0.7273 & 0.5924 \\
-\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & +0.0468 & -0.1691 & -0.0786 & -0.0242 & +0.2712 & -0.4377 & -0.1401 & +0.0766 & -0.0569 \\
+\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & \textcolor{posdelta}{+0.0468} & \textcolor{negdelta}{-0.1691} & \textcolor{negdelta}{-0.0786} & \textcolor{negdelta}{-0.0242} & \textcolor{posdelta}{+0.2712} & \textcolor{negdelta}{-0.4377} & \textcolor{negdelta}{-0.1401} & \textcolor{posdelta}{+0.0766} & \textcolor{negdelta}{-0.0569} \\
 Qwen3-VL-4B & 0.8238 & 0.8297 & 0.6824 & 0.7485 & 0.7051 & 0.8758 & 0.8820 & 0.5611 & 0.7635 \\
-\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & +0.2536 & -0.0909 & +0.0319 & +0.2940 & +0.2256 & +0.1890 & +0.2717 & -0.1617 & +0.1266 \\
+\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & \textcolor{posdelta}{+0.2536} & \textcolor{negdelta}{-0.0909} & \textcolor{posdelta}{+0.0319} & \textcolor{posdelta}{+0.2940} & \textcolor{posdelta}{+0.2256} & \textcolor{posdelta}{+0.1890} & \textcolor{posdelta}{+0.2717} & \textcolor{negdelta}{-0.1617} & \textcolor{posdelta}{+0.1266} \\
 LlavaGuard & 0.4288 & 0.4615 & 0.3047 & -- & -- & 0.4556 & 0.0931 & 0.3460 & 0.3483 \\
-\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & -0.0715 & +0.1425 & +0.0592 & -- & -- & -0.2316 & -0.1796 & -0.2044 & -0.1458 \\
+\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & \textcolor{negdelta}{-0.0715} & \textcolor{posdelta}{+0.1425} & \textcolor{posdelta}{+0.0592} & -- & -- & \textcolor{negdelta}{-0.2316} & \textcolor{negdelta}{-0.1796} & \textcolor{negdelta}{-0.2044} & \textcolor{negdelta}{-0.1458} \\
 SafeGuard-VL & 0.6675 & 0.3806 & 0.4000 & 0.3628 & 0.4153 & 0.7945 & 0.5765 & 0.5052 & 0.5128 \\
-\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & +0.1451 & -0.5513 & -0.2192 & -0.1128 & -0.0514 & -0.0135 & -0.1101 & -0.0664 & -0.1225 \\
+\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & \textcolor{posdelta}{+0.1451} & \textcolor{negdelta}{-0.5513} & \textcolor{negdelta}{-0.2192} & \textcolor{negdelta}{-0.1128} & \textcolor{negdelta}{-0.0514} & \textcolor{negdelta}{-0.0135} & \textcolor{negdelta}{-0.1101} & \textcolor{negdelta}{-0.0664} & \textcolor{negdelta}{-0.1225} \\
 ShieldGemma-2 & 0.5564 & 0.3184 & 0.6499 & 0.4897 & 0.1818 & 0.5359 & 0.2985 & 0.5091 & 0.4425 \\
-\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & -0.1403 & -0.5833 & +0.1455 & -0.1545 & -0.5039 & -0.0926 & -0.6671 & -0.4063 & -0.3003 \\
+\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & \textcolor{negdelta}{-0.1403} & \textcolor{negdelta}{-0.5833} & \textcolor{posdelta}{+0.1455} & \textcolor{negdelta}{-0.1545} & \textcolor{negdelta}{-0.5039} & \textcolor{negdelta}{-0.0926} & \textcolor{negdelta}{-0.6671} & \textcolor{negdelta}{-0.4063} & \textcolor{negdelta}{-0.3003} \\
 GuardReasoner-VL-7B & 0.8822 & 0.9005 & 0.6541 & 0.4259 & 0.2914 & 0.6130 & 0.6318 & 0.5149 & 0.6142 \\
-\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & -0.0211 & -0.0447 & -0.0443 & -0.1395 & +0.0585 & -0.0176 & -0.0380 & -0.0271 & -0.0342 \\
+\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & \textcolor{negdelta}{-0.0211} & \textcolor{negdelta}{-0.0447} & \textcolor{negdelta}{-0.0443} & \textcolor{negdelta}{-0.1395} & \textcolor{posdelta}{+0.0585} & \textcolor{negdelta}{-0.0176} & \textcolor{negdelta}{-0.0380} & \textcolor{negdelta}{-0.0271} & \textcolor{negdelta}{-0.0342} \\
 LLaVAShield & 0.7816 & 0.9669 & 0.6735 & 0.8667 & 0.8160 & 0.9919 & 0.9974 & 0.6282 & 0.8403 \\
-\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & -0.1195 & -0.0292 & +0.0818 & -0.1246 & -0.1493 & -0.0020 & +0.0042 & -0.0129 & -0.0439 \\
+\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & \textcolor{negdelta}{-0.1195} & \textcolor{negdelta}{-0.0292} & \textcolor{posdelta}{+0.0818} & \textcolor{negdelta}{-0.1246} & \textcolor{negdelta}{-0.1493} & \textcolor{negdelta}{-0.0020} & \textcolor{posdelta}{+0.0042} & \textcolor{negdelta}{-0.0129} & \textcolor{negdelta}{-0.0439} \\
 SingGuard-2B & 0.9549 & 0.9154 & 0.6960 & 0.9379 & 0.9291 & 0.9889 & 0.9530 & 0.8071 & 0.8978 \\
-\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & +0.0158 & -0.0351 & -0.0822 & -0.0318 & +0.0331 & +0.0286 & +0.1121 & +0.0024 & +0.0054 \\
+\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & \textcolor{posdelta}{+0.0158} & \textcolor{negdelta}{-0.0351} & \textcolor{negdelta}{-0.0822} & \textcolor{negdelta}{-0.0318} & \textcolor{posdelta}{+0.0331} & \textcolor{posdelta}{+0.0286} & \textcolor{posdelta}{+0.1121} & \textcolor{posdelta}{+0.0024} & \textcolor{posdelta}{+0.0054} \\
 SingGuard-4B & 0.9472 & 0.9071 & 0.7005 & 0.9032 & 0.9046 & 0.9712 & 0.7891 & 0.8427 & 0.8707 \\
-\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & +0.0176 & -0.0623 & -0.0755 & -0.0573 & +0.0317 & +0.0179 & -0.0714 & +0.0090 & -0.0238 \\
+\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & \textcolor{posdelta}{+0.0176} & \textcolor{negdelta}{-0.0623} & \textcolor{negdelta}{-0.0755} & \textcolor{negdelta}{-0.0573} & \textcolor{posdelta}{+0.0317} & \textcolor{posdelta}{+0.0179} & \textcolor{negdelta}{-0.0714} & \textcolor{posdelta}{+0.0090} & \textcolor{negdelta}{-0.0238} \\
 SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.9571 & 0.8908 & 0.9551 & 0.8653 & 0.8234 & 0.8828 \\
-\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & +0.0025 & -0.0645 & -0.0795 & -0.0280 & -0.0055 & -0.0117 & -0.0159 & -0.0081 & -0.0263 \\
+\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & \textcolor{posdelta}{+0.0025} & \textcolor{negdelta}{-0.0645} & \textcolor{negdelta}{-0.0795} & \textcolor{negdelta}{-0.0280} & \textcolor{negdelta}{-0.0055} & \textcolor{negdelta}{-0.0117} & \textcolor{negdelta}{-0.0159} & \textcolor{negdelta}{-0.0081} & \textcolor{negdelta}{-0.0263} \\
 \bottomrule\end{tabular}\end{table*}
 
 
