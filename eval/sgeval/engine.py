@@ -113,13 +113,14 @@ class VLLMServer:
 
     def __init__(self, model_path: str, port: int = 8199, max_model_len: int = 8192,
                  gpu_memory_utilization: float = 0.90, log_file: str | None = None,
-                 timeout_s: int = 2400, max_num_seqs: int = 32):
+                 timeout_s: int = 2400, max_num_seqs: int = 32, tp: int = 1):
         self.model_path = model_path
         self.port = port
         self.max_model_len = max_model_len
         self.gpu_mem = gpu_memory_utilization
         self.timeout_s = timeout_s
         self.max_num_seqs = max_num_seqs
+        self.tp = max(1, int(tp))    # tensor parallel ranks; 1 = single GPU
         self.log_file = log_file
         self.proc: subprocess.Popen | None = None
         self.template_fp = ""      # set by start(); part of the resume fingerprint
@@ -166,6 +167,10 @@ class VLLMServer:
         tpl, self.template_fp = resolve_chat_template(self.model_path)
         if tpl:
             cmd += ["--chat-template", tpl]
+        if self.tp > 1:
+            # Shard across N GPUs (**must** divide num_attention_heads; for Qwen3-VL-235B
+            # that is 64, so 5 ranks is not a legal world size).
+            cmd += ["--tensor-parallel-size", str(self.tp)]
         log.info("starting vLLM: %s", " ".join(cmd))
         logf = open(self.log_file, "ab") if self.log_file else subprocess.DEVNULL
         # own process group so stop() can reap the whole tree (vllm renames engine

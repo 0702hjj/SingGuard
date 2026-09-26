@@ -153,3 +153,22 @@ llama-guard4-12b:
   path: models/llama-guard4-12b
   max_model_len: 32768
   gen: {temperature: 0.0, max_tokens: 64}
+
+# ------------------------------------------------------------------ registry only
+qwen3-vl-235b:
+  <<: *defaults
+  label: Qwen3-VL-235B
+  # Needs 8 free GPUs on ONE node; not runnable on the currently available 4. Kept in the
+  # registry so weights can be staged ahead of a window. See the `tp` note below.
+  enabled: false
+  adapter: generic_vlm_guard
+  ms_id: Qwen/Qwen3-VL-235B-A22B-Instruct-FP8   # only quantised release; bf16 is 439 GiB
+  hf_id: Qwen/Qwen3-VL-235B-A22B-Instruct-FP8
+  path: models/qwen3-vl-235b-fp8
+  max_model_len: 32768
+  # 64 attention heads / 4 KV heads: vLLM needs the world size to divide the head count, so
+  # TP=5 is not a legal size at all (64/5 is not an integer), and TP=4 x 48 GiB cannot hold
+  # the 221 GiB of FP8 weights. 8 is the only working configuration.
+  tp: 8
+  gen: {temperature: 0.0, max_tokens: 512}
+  chat_template_kwargs: {enable_thinking: false}

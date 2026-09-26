@@ -22,10 +22,13 @@
 \label{tab:table4-repro}
 \begin{tabular}{lccccccccc}\toprule
 模型 & VLGuard & JailBreakV & SPA-VL & MMDS-Q & MMDS-R & VLSBench & MM-Safety & BeaverTails-V & 平均 \\\midrule
-Qwen3-VL-8B & 0.6003 & 0.7593 & 0.6214 & -- & -- & 0.3207 & 0.5005 & 0.7273 & 0.5882 \\
-Qwen3-VL-4B & 0.8238 & 0.8297 & 0.6824 & -- & -- & 0.8758 & 0.8820 & 0.5611 & 0.7758 \\
-LlavaGuard & 0.4290 & 0.4756 & -- & -- & -- & -- & -- & -- & 0.4523 \\
-GuardReasoner-VL-7B & 0.8822 & 0.9005 & 0.6541 & -- & -- & 0.6130 & 0.6318 & 0.5149 & 0.6994 \\
+Qwen3-VL-8B & 0.6003 & 0.7593 & 0.6214 & 0.5532 & 0.6567 & 0.3207 & 0.5005 & 0.7273 & 0.5924 \\
+Qwen3-VL-4B & 0.8238 & 0.8297 & 0.6824 & 0.7485 & 0.7051 & 0.8758 & 0.8820 & 0.5611 & 0.7635 \\
+LlavaGuard & 0.4288 & 0.4615 & 0.3047 & 0.0190 & -- & 0.4556 & 0.0931 & 0.3460 & 0.3012 \\
+SafeGuard-VL & 0.6675 & 0.3806 & 0.4000 & 0.3628 & 0.4153 & 0.7945 & 0.5765 & 0.5052 & 0.5128 \\
+ShieldGemma-2 & 0.5564 & 0.3184 & 0.6499 & 0.4897 & 0.1818 & 0.5359 & 0.2985 & 0.5091 & 0.4425 \\
+GuardReasoner-VL-7B & 0.8822 & 0.9005 & 0.6541 & 0.4259 & 0.2914 & 0.6130 & 0.6318 & 0.5149 & 0.6142 \\
+LLaVAShield & 0.7816 & 0.9669 & 0.6735 & 0.8667 & 0.8160 & 0.9919 & 0.9974 & 0.6282 & 0.8403 \\
 SingGuard-2B & 0.9549 & 0.9154 & 0.6960 & 0.9379 & 0.9291 & 0.9889 & 0.9530 & 0.8071 & 0.8978 \\
 SingGuard-4B & 0.9472 & 0.9071 & 0.7005 & 0.9032 & 0.9046 & 0.9712 & 0.7891 & 0.8427 & 0.8707 \\
 SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.9571 & 0.8908 & 0.9551 & 0.8653 & 0.8234 & 0.8828 \\
@@ -56,12 +59,26 @@ SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.9571 & 0.8908 & 0.9551 & 0.8653 & 0.
         （INSTRUCTION 作为 system message、\texttt{Human user:/AI assistant:} 转录、
         结论置于 \texttt{<result>} 块）并非常规 chat 调用。总体而言基线 prompt 仍是近似------
         论文只公布了 SingGuard 的模板------故其逐列 $\Delta$ 仅供参考，并非精确值。
-  \item \textbf{尚缺.} LlamaGuard3-Vision-11B 与 LlamaGuard4-12B 两行（已排队）；
-        LLaVAShield-v1.0-7B 发布的是 LLaVA-NeXT 训练格式 checkpoint
-        （\texttt{LlavaQwenForCausalLM}，无 \texttt{auto\_map}），vLLM 0.11 与 transformers
-        均无法直接加载------转换版本正在验证中。
-  \item \textbf{Qwen3-VL-235B} 未运行：bf16（约 470\,GB）/ FP8（约 235\,GB）无法在共享的
-        8$\times$A6000 节点上容纳（除非使用多卡张量并行）。
+  \item \textbf{LLaVAShield 的验证价值.} 该模型的发布权重是 LLaVA-NeXT 训练格式
+        （\texttt{LlavaQwenForCausalLM}，无 \texttt{auto\_map}），vLLM 与 transformers 都无法直接加载；
+        我们做了纯键名重映射的转换（765/765 张量，无 reshape）。转换正确性有一个强判据：
+        MMDS 的评级就是该模型自己生成的（论文 MMDS-Q 0.9913），而我们的 VLSBench 0.9919 /
+        MM-Safety 0.9974 与论文的 0.9939 / 0.9932 几乎一致------错配的权重不可能复现到这个程度。
+  \item \textbf{LLaVAShield 在 MMDS 两列偏低.} 0.8667 / 0.8160 vs 论文 0.9913 / 0.9653。
+        原因是上下文而非转换：该 checkpoint 的 \texttt{max\_position\_embeddings} 是 32768，
+        而 MMDS-Q 有 24/330 条提示超出该上限（最长 49255 token）被 vLLM 拒绝、按协议记为错误，
+        且**这些行全是 unsafe 标签**。precision 为 1.0000（从不误报），缺口集中在召回。
+  \item \textbf{LlavaGuard 的 MMDS 两列.} 该模型是 LLaVA-1.5 架构，真实上下文只有 4096，
+        MMDS 的长对话会直接把引擎撑崩（首次尝试 246/330 请求失败）。重跑中；超出上下文的行
+        按协议记为错误，即如实反映该模型的能力边界。
+  \item \textbf{Qwen3-VL-235B.} 未跑完：它在 ModelScope 上只有 FP8 版（权重 221.3 GiB）。
+        该模型有 64 个注意力头，tensor-parallel 世界大小必须整除 64------**5 卡不是合法分片数**，
+        而 4 卡 ×48 GiB = 192 GiB 装不下权重，**唯一可行配置是单节点 8 卡**。权重已开始在
+        闲置节点上预下载，一旦凑够 8 张空闲卡即自动以 TP=8 启动（\texttt{logs/qwen235b.log}）。
+  \item \textbf{评测口径.} 全部基线均使用各自发布的 prompt/模板（非统一模板），
+        但仍属近似------论文只公布了 SingGuard 的模板------故基线行的逐列 $\Delta$ 供参考。
+  \item \textbf{ShieldGemma-2 是纯图像分类器}，无图的行直接跳过，故其 JailBreakV 一列
+        只覆盖有图的 338 条（JailBreakV 公开图像仅 ~360 张）。
 \end{itemize}
 
 \end{document}

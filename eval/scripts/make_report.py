@@ -105,12 +105,26 @@ NOTES_BLOCK = r"""
         （INSTRUCTION 作为 system message、\texttt{Human user:/AI assistant:} 转录、
         结论置于 \texttt{<result>} 块）并非常规 chat 调用。总体而言基线 prompt 仍是近似------
         论文只公布了 SingGuard 的模板------故其逐列 $\Delta$ 仅供参考，并非精确值。
-  \item \textbf{尚缺.} LlamaGuard3-Vision-11B 与 LlamaGuard4-12B 两行（已排队）；
-        LLaVAShield-v1.0-7B 发布的是 LLaVA-NeXT 训练格式 checkpoint
-        （\texttt{LlavaQwenForCausalLM}，无 \texttt{auto\_map}），vLLM 0.11 与 transformers
-        均无法直接加载------转换版本正在验证中。
-  \item \textbf{Qwen3-VL-235B} 未运行：bf16（约 470\,GB）/ FP8（约 235\,GB）无法在共享的
-        8$\times$A6000 节点上容纳（除非使用多卡张量并行）。
+  \item \textbf{LLaVAShield 的验证价值.} 该模型的发布权重是 LLaVA-NeXT 训练格式
+        （\texttt{LlavaQwenForCausalLM}，无 \texttt{auto\_map}），vLLM 与 transformers 都无法直接加载；
+        我们做了纯键名重映射的转换（765/765 张量，无 reshape）。转换正确性有一个强判据：
+        MMDS 的评级就是该模型自己生成的（论文 MMDS-Q 0.9913），而我们的 VLSBench 0.9919 /
+        MM-Safety 0.9974 与论文的 0.9939 / 0.9932 几乎一致------错配的权重不可能复现到这个程度。
+  \item \textbf{LLaVAShield 在 MMDS 两列偏低.} 0.8667 / 0.8160 vs 论文 0.9913 / 0.9653。
+        原因是上下文而非转换：该 checkpoint 的 \texttt{max\_position\_embeddings} 是 32768，
+        而 MMDS-Q 有 24/330 条提示超出该上限（最长 49255 token）被 vLLM 拒绝、按协议记为错误，
+        且**这些行全是 unsafe 标签**。precision 为 1.0000（从不误报），缺口集中在召回。
+  \item \textbf{LlavaGuard 的 MMDS 两列.} 该模型是 LLaVA-1.5 架构，真实上下文只有 4096，
+        MMDS 的长对话会直接把引擎撑崩（首次尝试 246/330 请求失败）。重跑中；超出上下文的行
+        按协议记为错误，即如实反映该模型的能力边界。
+  \item \textbf{Qwen3-VL-235B.} 未跑完：它在 ModelScope 上只有 FP8 版（权重 221.3 GiB）。
+        该模型有 64 个注意力头，tensor-parallel 世界大小必须整除 64------**5 卡不是合法分片数**，
+        而 4 卡 ×48 GiB = 192 GiB 装不下权重，**唯一可行配置是单节点 8 卡**。权重已开始在
+        闲置节点上预下载，一旦凑够 8 张空闲卡即自动以 TP=8 启动（\texttt{logs/qwen235b.log}）。
+  \item \textbf{评测口径.} 全部基线均使用各自发布的 prompt/模板（非统一模板），
+        但仍属近似------论文只公布了 SingGuard 的模板------故基线行的逐列 $\Delta$ 供参考。
+  \item \textbf{ShieldGemma-2 是纯图像分类器}，无图的行直接跳过，故其 JailBreakV 一列
+        只覆盖有图的 338 条（JailBreakV 公开图像仅 ~360 张）。
 \end{itemize}
 """
 

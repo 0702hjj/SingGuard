@@ -74,6 +74,9 @@ def eval_dataset(model_key: str, mcfg: dict, ds_key: str, samples: list[dict], a
                        _tpl_fp)
     if any(s_.get("policy_list") for s_ in samples):
         cur_cfg += "+policy"   # per-sample active policy changes the prompt -> distinct config
+    _tp = int(mcfg.get("tp", 1))
+    if _tp > 1:
+        cur_cfg += f"+tp{_tp}"   # a different sharding is a different (if equivalent) run
 
     def _resumable(rec: dict) -> bool:
         # a completion counts only if it was produced under the CURRENT configuration and
@@ -240,6 +243,7 @@ def main() -> int:
                 gpu_memory_utilization=(args.gpu_util if args.gpu_util is not None
                                         else mcfg.get("gpu_memory_utilization", 0.90)),
                 max_num_seqs=args.max_seqs,
+                tp=int(mcfg.get("tp", 1)),
                 log_file=str(LOGS / f"vllm_{mk}.log"))
             try:
                 server.start()
