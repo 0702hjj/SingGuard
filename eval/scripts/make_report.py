@@ -43,6 +43,12 @@ PREAMBLE = r"""\documentclass[10pt]{article}
 \setCJKsansfont{Noto Sans CJK SC}[AutoFakeSlant=0.2]
 \setCJKmonofont{Noto Sans Mono CJK SC}
 \usepackage{booktabs}
+% Row shading: the comparison table pairs each model's score with its delta, and the
+% reproduction table is a plain grid -- alternating a light tint is what makes either
+% scannable without adding rules. `table` option is required for \rowcolor.
+\usepackage[table]{xcolor}
+\definecolor{rowbg}{gray}{0.93}
+\definecolor{headbg}{gray}{0.85}
 \usepackage{geometry}
 \geometry{margin=1.6cm, landscape}
 \usepackage{caption}
@@ -164,11 +170,13 @@ def write_documents(df: pd.DataFrame, paper: pd.DataFrame, labels: dict) -> None
         + r"本表包含 " + f"{n_cols}/8" + r" 列。}",
         r"\label{tab:table4-repro}",
         r"\begin{tabular}{l" + "c" * (len(PAPER_COLS) + 1) + r"}\toprule",
-        "模型 & " + " & ".join(PAPER_COLS) + r" & 平均 \\\midrule",
+        r"\rowcolor{headbg} 模型 & " + " & ".join(PAPER_COLS) + r" & 平均 \\\midrule",
     ]
-    for model, row in repro.iterrows():
+    for i, (model, row) in enumerate(repro.iterrows()):
         cells = [fmt(row[c]) for c in PAPER_COLS]
-        body.append(f"{tex_escape(str(model))} & " + " & ".join(cells) + f" & {fmt(row['Avg'])} \\\\")
+        shade = r"\rowcolor{rowbg} " if i % 2 else ""     # zebra striping
+        body.append(f"{shade}{tex_escape(str(model))} & " + " & ".join(cells)
+                    + f" & {fmt(row['Avg'])} \\\\")
     body += [r"\bottomrule\end{tabular}\end{table*}"]
 
     # ---------------- comparison table ----------------
@@ -182,9 +190,9 @@ def write_documents(df: pd.DataFrame, paper: pd.DataFrame, labels: dict) -> None
         + f"{len(both)}/8" + r" 列取平均。}",
         r"\label{tab:table4-compare}",
         r"\begin{tabular}{l" + "c" * len(both) + r"c}\toprule",
-        "模型 & " + " & ".join(both) + r" & 平均 \\\midrule",
+        r"\rowcolor{headbg} 模型 & " + " & ".join(both) + r" & 平均 \\\midrule",
     ]
-    for _, r in merged.iterrows():
+    for mi, (_, r) in enumerate(merged.iterrows()):
         ours = " & ".join(fmt(r[f"{c}_ours"]) for c in both)
         deltas = " & ".join(
             "--" if (pd.isna(r[f"{c}_ours"]) or pd.isna(r[f"{c}_paper"]))
@@ -192,7 +200,8 @@ def write_documents(df: pd.DataFrame, paper: pd.DataFrame, labels: dict) -> None
         o_avg = merged.loc[merged["Model"] == r["Model"], [f"{c}_ours" for c in both]].iloc[0].mean()
         p_avg = merged.loc[merged["Model"] == r["Model"], [f"{c}_paper" for c in both]].iloc[0].mean()
         comp.append(f"{tex_escape(str(r['Model']))} & " + ours + f" & {o_avg:.4f} \\\\")
-        comp.append(r"\hspace{1.2em}$\Delta$ vs 论文 & " + deltas
+        # shade every delta row: the pair (score, delta) then reads as one unit
+        comp.append(r"\rowcolor{rowbg} \hspace{1.2em}$\Delta$ vs 论文 & " + deltas
                     + f" & {o_avg - p_avg:+.4f} \\\\")
     comp += [r"\bottomrule\end{tabular}\end{table*}", r"\end{document}"]
 
