@@ -63,8 +63,21 @@ def fmt(v) -> str:
     return "--" if pd.isna(v) else f"{v:.4f}"
 
 
+# Cells where coverage is too low to be a measurement rather than a probe of the model's
+# context limit. LlavaGuard is LLaVA-1.5 (4096 tokens): only 49/330 MMDS-Q and 54/327 MMDS-R
+# prompts fit; the rest come back as <INPUT_ERROR>. An F1 over ~15% of the rows would read
+# as "this model scores 0.0" when what it means is "this harness cannot feed it". Left as
+# -- in the table; the counts and the subset score are recorded in the notes instead.
+CELL_EXCLUSIONS = {("llavaguard-7b", "mmds-q"), ("llavaguard-7b", "mmds-r")}
+
+
 def load_results(paths: list[Path]) -> pd.DataFrame:
     df = pd.concat([pd.read_csv(p) for p in paths], ignore_index=True)
+    excl = pd.Series(list(zip(df["model"], df["dataset"]))).isin(CELL_EXCLUSIONS)
+    if excl.any():
+        print(f"note: excluded {int(excl.sum())} low-coverage cell row(s): "
+              f"{sorted(CELL_EXCLUSIONS)}")
+    df = df[~excl.values]
     if "smoke" in df.columns:
         df = df[~df["smoke"].astype(str).str.lower().isin(("true", "1"))]
     if "limit" in df.columns:
@@ -114,9 +127,11 @@ NOTES_BLOCK = r"""
         原因是上下文而非转换：该 checkpoint 的 \texttt{max\_position\_embeddings} 是 32768，
         而 MMDS-Q 有 24/330 条提示超出该上限（最长 49255 token）被 vLLM 拒绝、按协议记为错误，
         且**这些行全是 unsafe 标签**。precision 为 1.0000（从不误报），缺口集中在召回。
-  \item \textbf{LlavaGuard 的 MMDS 两列.} 该模型是 LLaVA-1.5 架构，真实上下文只有 4096，
-        MMDS 的长对话会直接把引擎撑崩（首次尝试 246/330 请求失败）。重跑中；超出上下文的行
-        按协议记为错误，即如实反映该模型的能力边界。
+  \item \textbf{LlavaGuard 的 MMDS 两列记为 N/A.} 该模型是 LLaVA-1.5 架构，真实上下文
+        只有 4096 token，而 MMDS 的对话（含每图 576 token 的视觉输入）远超这个长度：
+        实际只有 49/330（Q）与 54/327（R）行能被装下，其余被 vLLM 以 400 拒绝。在 15\%
+        覆盖率上算出的 F1（0.0186 / 0.0000）是上下文上限的度量，不是模型判断力的度量，
+        因此留空------论文该列为 0.6800 / 0.6972，说明其评测做了截断或不同的输入组装。
   \item \textbf{Qwen3-VL-235B.} 未跑完：它在 ModelScope 上只有 FP8 版（权重 221.3 GiB）。
         该模型有 64 个注意力头，tensor-parallel 世界大小必须整除 64------**5 卡不是合法分片数**，
         而 4 卡 ×48 GiB = 192 GiB 装不下权重，**唯一可行配置是单节点 8 卡**。权重已开始在
