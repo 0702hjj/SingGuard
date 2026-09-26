@@ -33,7 +33,10 @@ def looks_complete(dest: Path) -> bool:
 
 def download_modelscope(repo_id: str, dest: Path) -> None:
     from modelscope import snapshot_download
-    snapshot_download(repo_id, local_dir=str(dest))
+    # max_workers is the number of files fetched concurrently. The default serialises them,
+    # which caps throughput at one stream (~3.5 MB/s measured) -- a 237 GB checkpoint would
+    # take ~19 h instead of ~5. Shards are independent, so fetching several at once is safe.
+    snapshot_download(repo_id, local_dir=str(dest), max_workers=8)
 
 
 def download_hf(repo_id: str, dest: Path) -> None:
