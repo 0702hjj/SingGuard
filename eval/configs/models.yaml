@@ -172,3 +172,22 @@ qwen3-vl-235b:
   tp: 8
   gen: {temperature: 0.0, max_tokens: 512}
   chat_template_kwargs: {enable_thinking: false}
+
+qwen3-vl-235b-api:
+  <<: *defaults
+  label: Qwen3-VL-235B
+  # Hosted endpoint instead of local weights: the FP8 checkpoint needs 8 free GPUs on one
+  # node (see the tp note on qwen3-vl-235b above) and this removes the hardware dependency
+  # entirely. Docs: https://www.qianwenai.com/models/qwen3-vl-235b-a22b-instruct
+  # Caveat for the report: same model family, but not provably the same weights/serving
+  # config as the paper's local run -- label it as an API channel.
+  engine: openai_compatible
+  adapter: generic_vlm_guard
+  base_url: https://maas.qianwenaiapi.com/compatible-mode/v1
+  api_model: qwen3-vl-235b-a22b-instruct
+  api_key_env: DASHSCOPE_API_KEY      # read from the environment; never logged, never argv
+  rpm: 55                             # plan cap is 60 RPM -- leave headroom for retries
+  max_model_len: 131072
+  gen: {temperature: 0.0, max_tokens: 512}
+  # No chat_template_kwargs: that knob drives our *local* template, and sending it to a
+  # hosted endpoint risks a 400 for an unsupported field.

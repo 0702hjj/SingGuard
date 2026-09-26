@@ -20,6 +20,7 @@ import asyncio
 import csv
 import json
 import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -30,7 +31,7 @@ EVAL_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(EVAL_DIR))
 
 from sgeval.adapters import get_adapter
-from sgeval.engine import (ServerDeadError, VLLMServer, finalize_records,
+from sgeval.engine import (ApiEndpoint, ServerDeadError, VLLMServer, finalize_records,
                            run_dataset_hf, run_dataset_vllm)
 from sgeval.metrics import prf
 
@@ -226,7 +227,8 @@ def main() -> int:
     rc = 0
     for mk in mkeys:
         mcfg = models[mk]
-        if not (EVAL_DIR / mcfg["path"] / "config.json").exists():
+        is_api = mcfg.get("engine") == "openai_compatible"
+        if not is_api and not (EVAL_DIR / mcfg["path"] / "config.json").exists():
             print(f"[skip] {mk}: {mcfg['path']} missing -- run scripts/download_models.py",
                   file=sys.stderr)
             rc = 1
@@ -236,7 +238,24 @@ def main() -> int:
         if mcfg.get("engine") == "classifier":
             use_hf = True          # no vLLM server for the classifier path
         server = None
-        if not use_hf:
+        if is_api:
+            # Hosted provider (OpenAI-compatible). No GPU, no local weights: the "server"
+            # is a shim carrying the endpoint, model id, and where to read the key from.
+            # The key is NEVER logged and never taken from the command line (shared box:
+            # `ps` shows every user's argv).
+            key_env = mcfg.get("api_key_env", "DASHSCOPE_API_KEY")
+            key = os.environ.get(key_env, "")
+            if not key:
+                print(f"[skip] {mk}: ${key_env} is not set in this environment "
+                      f"(source your secrets file before launching)", file=sys.stderr)
+                rc = 1
+                continue
+            server = ApiEndpoint(base_url=mcfg["base_url"], api_model=mcfg["api_model"],
+                                 api_key=key, rpm=float(mcfg.get("rpm", 60)))
+            args._server = server
+            log.info("%s -> %s (model=%s, rpm cap %s)", mk, server.base_url,
+                     server.api_model, server.rpm)
+        elif not use_hf:
             server = VLLMServer(
                 str(EVAL_DIR / mcfg["path"]), port=args.port,
                 max_model_len=mcfg.get("max_model_len", 8192),

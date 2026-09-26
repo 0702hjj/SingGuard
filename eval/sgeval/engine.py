@@ -106,6 +106,51 @@ def _is_input_rejection(exc: Exception) -> bool:
     return True
 
 
+class ApiEndpoint:
+    """A hosted OpenAI-compatible provider, standing in where VLLMServer would.
+
+    Nothing is spawned and no GPU is used: the endpoint just carries the base URL, the
+    provider's model id, the key (already read from the environment by the caller) and a
+    requests-per-minute ceiling. `template_fp` is empty because we do not control the
+    provider's chat template -- worth remembering when comparing against local rows.
+    """
+
+    def __init__(self, base_url: str, api_model: str, api_key: str, rpm: float = 60.0):
+        self.base_url = base_url
+        self.api_model = api_model
+        self.api_key = api_key
+        self.rpm = float(rpm)
+        self.template_fp = ""
+        self.proc = None
+
+    def stop(self) -> None:      # symmetry with VLLMServer; nothing to tear down
+        return
+
+
+class _RateLimiter:
+    """Average requests-per-minute ceiling, enforced by spacing request starts.
+
+    Provider plans cap RPM as well as TPM, and our throughput comes from client-side
+    concurrency, which alone would burst far past it. Spacing starts is enough because the
+    cap is on request starts, not on how long each one takes.
+    """
+
+    def __init__(self, rpm: float):
+        self.min_interval = (60.0 / rpm) if rpm and rpm > 0 else 0.0
+        self._next = 0.0
+        self._lock = asyncio.Lock()
+
+    async def acquire(self) -> None:
+        if not self.min_interval:
+            return
+        async with self._lock:
+            now = time.monotonic()
+            wait = self._next - now
+            self._next = max(now, self._next) + self.min_interval
+        if wait > 0:
+            await asyncio.sleep(wait)
+
+
 class ServerDeadError(RuntimeError):
     """Raised when >50% of a dataset's requests failed with connection errors,
     meaning the vLLM engine died (e.g. CUDA OOM). The runner aborts this model."""
@@ -233,8 +278,13 @@ class VLLMServer:
 async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen_args: dict,
                            chat_template_kwargs: dict, data_dir: Path, concurrency: int = 32,
                            retries: int = 3, progress_desc: str = "") -> list[dict]:
-    """Evaluate one dataset against a live server. Returns prediction records."""
-    client = AsyncOpenAI(base_url=server.base_url, api_key="EMPTY", timeout=600, max_retries=2)
+    """Evaluate one dataset against a live server (local vLLM or a hosted endpoint).
+    Returns prediction records."""
+    client = AsyncOpenAI(base_url=server.base_url,
+                         api_key=getattr(server, "api_key", "EMPTY"),
+                         timeout=600, max_retries=2)
+    model_name = getattr(server, "api_model", "guard")
+    limiter = _RateLimiter(getattr(server, "rpm", 0.0))   # no-op for local servers
     sem = asyncio.Semaphore(concurrency)
     url_cache: dict[str, str] = {}
 
@@ -271,9 +321,11 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
         extra = {"chat_template_kwargs": kw} if kw else {}
         for attempt in range(retries):
             try:
+                await limiter.acquire()
                 async with sem:   # actually throttle client-side (was previously a no-op)
                     r = await client.chat.completions.create(
-                        model="guard", messages=msgs, temperature=gen_args.get("temperature", 0.0),
+                        model=model_name, messages=msgs,
+                        temperature=gen_args.get("temperature", 0.0),
                         max_tokens=gen_args.get("max_tokens", 256), extra_body=extra)
                 text = r.choices[0].message.content or ""
                 pred = adapter.parse(text, sample=s)
