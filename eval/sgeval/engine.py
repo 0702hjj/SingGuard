@@ -91,6 +91,21 @@ def resolve_chat_template(model_path: str) -> tuple[str | None, str]:
     return None, ""
 
 
+def _is_input_rejection(exc: Exception) -> bool:
+    """True when the server rejected the request itself (HTTP 400) rather than failing.
+
+    vLLM answers an over-long prompt with 400 and a message naming the limit; that request
+    can never succeed, so it must not be retried, must not be counted as an engine failure,
+    and should be recorded as an unusable input instead.
+    """
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+    if status != 400:
+        return False
+    return True
+
+
 class ServerDeadError(RuntimeError):
     """Raised when >50% of a dataset's requests failed with connection errors,
     meaning the vLLM engine died (e.g. CUDA OOM). The runner aborts this model."""
@@ -269,6 +284,18 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
                         "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs, server.template_fp),
                         "finish_reason": getattr(r.choices[0], "finish_reason", None)}
             except Exception as e:  # noqa: BLE001
+                # A 400 is the server rejecting THIS request (almost always an over-long
+                # prompt), not a transport failure: it will never succeed on retry and it
+                # says nothing about engine health. Marking it <INPUT_ERROR> keeps it out of
+                # the engine-death ratio -- otherwise a model with a small context (e.g.
+                # LlavaGuard's 4096) aborts the whole model on the rows it cannot hold,
+                # when the protocol wants those scored as incorrect and the rest measured.
+                if _is_input_rejection(e):
+                    log.warning("input rejected for %s: %s", s["id"], e)
+                    return {"id": s["id"], "gold": s["label"], "pred": None,
+                            "raw": f"<INPUT_ERROR {e}>"[:400],
+                            "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs,
+                                            server.template_fp)}
                 if attempt == retries - 1:
                     log.error("request failed for %s: %s", s["id"], e)
                     return {"id": s["id"], "gold": s["label"], "pred": None,
