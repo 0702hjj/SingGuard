@@ -332,9 +332,15 @@ async def run_dataset_vllm(server: VLLMServer, samples: list[dict], adapter, gen
                 # store head + tail: the trailing <answer> lands in the tail, so audits can
                 # later tell truncation / provisional-vs-final apart (head-only lost it)
                 raw = text[:300] + ("…" + text[-250:] if len(text) > 550 else text[300:])
+                u = getattr(r, "usage", None)
                 return {"id": s["id"], "gold": s["label"], "pred": pred, "raw": raw,
                         "cfg": _cfg_tag(adapter, gen_args, chat_template_kwargs, server.template_fp),
-                        "finish_reason": getattr(r.choices[0], "finish_reason", None)}
+                        "finish_reason": getattr(r.choices[0], "finish_reason", None),
+                        # token accounting: a hosted endpoint has a budget, so the spend has
+                        # to be visible in the records rather than inferred afterwards
+                        "usage": ({"in": getattr(u, "prompt_tokens", None),
+                                   "out": getattr(u, "completion_tokens", None)}
+                                  if u is not None else None)}
             except Exception as e:  # noqa: BLE001
                 # A 400 is the server rejecting THIS request (almost always an over-long
                 # prompt), not a transport failure: it will never succeed on retry and it
