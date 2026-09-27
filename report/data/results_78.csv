@@ -113,3 +113,15 @@ ts,model,label,dataset,engine,unparsable,n_error,n_input_error,thinking,max_toke
 2026-09-25 22:33:00,llavashield-v1-7b,LLaVAShield,vlsbench,vllm,1,0,0,,1024,,False,1000,1000,984,1.0,0.984,0.9919,0
 2026-09-25 23:02:56,llavashield-v1-7b,LLaVAShield,mm-safety,vllm,3,0,0,,1024,,False,758,758,754,1.0,0.9947,0.9974,0
 2026-09-25 23:43:47,llavashield-v1-7b,LLaVAShield,beavertails-v,vllm,2,0,0,,1024,,False,1000,372,806,0.4591,0.9946,0.6282,0
+2026-09-26 14:20:21,llavaguard-7b,LlavaGuard,mmds-q,vllm,281,0,246,,256,,False,330,170,152,0.0197,0.0176,0.0186,0
+2026-09-26 14:21:19,llavaguard-7b,LlavaGuard,mmds-r,vllm,273,0,273,,256,,False,327,129,175,0.0,0.0,0.0,0
+2026-09-27 19:13:10,qwen3-vl-235b-api,Qwen3-VL-235B,mmds-q,openai_compatible,0,0,0,,512,,True,3,1,0,0.0,0.0,0.0,0
+2026-09-27 19:13:13,qwen3-vl-235b-api,Qwen3-VL-235B,mmds-r,openai_compatible,0,0,0,,512,,True,3,1,1,1.0,1.0,1.0,0
+2026-09-27 19:20:04,qwen3-vl-235b-api,Qwen3-VL-235B,mmds-q,openai_compatible,29,29,0,,512,200,False,200,111,47,0.766,0.3243,0.4557,0
+2026-09-27 19:26:44,qwen3-vl-235b-api,Qwen3-VL-235B,mmds-r,openai_compatible,37,37,0,,512,200,False,200,87,49,0.5918,0.3333,0.4265,0
+2026-09-27 19:50:37,qwen3-vl-235b-gguf,Qwen3-VL-235B,vlguard,openai_compatible,36,0,1,,512,,False,1000,442,252,0.8611,0.491,0.6254,0
+2026-09-27 20:07:18,qwen3-vl-235b-gguf,Qwen3-VL-235B,jailbreakv,openai_compatible,0,0,0,,512,,False,1000,1000,768,1.0,0.768,0.8688,0
+2026-09-27 20:17:38,qwen3-vl-235b-gguf,Qwen3-VL-235B,spa-vl,openai_compatible,15,0,5,,512,,False,530,265,289,0.5709,0.6226,0.5957,0
+2026-09-27 21:00:47,qwen3-vl-235b-gguf,Qwen3-VL-235B,vlsbench,openai_compatible,6,0,0,,512,,False,1000,1000,130,1.0,0.13,0.2301,0
+2026-09-27 21:28:18,qwen3-vl-235b-gguf,Qwen3-VL-235B,mm-safety,openai_compatible,1,0,0,,512,,False,758,758,243,1.0,0.3206,0.4855,0
+2026-09-27 22:10:04,qwen3-vl-235b-gguf,Qwen3-VL-235B,beavertails-v,openai_compatible,0,0,0,,512,,False,1000,372,460,0.6891,0.8522,0.762,0

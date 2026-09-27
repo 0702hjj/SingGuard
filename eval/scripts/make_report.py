@@ -171,6 +171,14 @@ NOTES_BLOCK = r"""
         $R = 0.387$）；MMDS-R 因配额用尽未能运行。实测成本为 **3{,}414 token/条**
         （是全量 657 条约需 2.2M token），故只做了抽样。
         \textbf{该行不参与与论文的逐列对比}------它既非完整采样，也非本地权重。
+  \item \textbf{Qwen3-VL-235B 的本地 6 列用的是 4bit 量化，不是论文的配置.} 该行前 6 列由
+        llama.cpp 跑 GGUF Q4\_K\_M（142 GB）得到，**4bit 量化与论文的 bf16/FP8 不是一回事**，
+        故此行的绝对值只能看趋势、不能与论文逐列对比。一个支持"量化不是主因"的观察：
+        三列全 unsafe 的基准里 precision 都是 1.0000（从不误报），缺口全在召回------
+        VLSBench $R=0.130$、MM-Safety $R=0.321$、JailBreakV $R=0.768$；而我们此前跑的
+        Qwen3-VL-8B 在这三列呈现**同样的塌陷形态**（VLSBench 0.3207、MM-Safety 0.5005，
+        均远低于论文）。所以 VLSBench/MM-Safety 的低分更像是 Qwen3-VL 系列在这些攻击类型
+        上的固有保守，或提示词/解析口径差异，而非量化损失。
   \item \textbf{评测口径.} 全部基线均使用各自发布的 prompt/模板（非统一模板），
         但仍属近似------论文只公布了 SingGuard 的模板------故基线行的逐列 $\Delta$ 供参考。
   \item \textbf{ShieldGemma-2 是纯图像分类器}，无图的行直接跳过，故其 JailBreakV 一列
