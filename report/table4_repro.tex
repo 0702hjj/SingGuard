@@ -46,72 +46,22 @@ SingGuard-8B & 0.9536 & 0.9083 & 0.7089 & 0.9571 & 0.8908 & 0.9551 & 0.8653 & 0.
 \bottomrule\end{tabular}\end{table*}
 
 \section*{说明}
-\begin{itemize}\itemsep2pt
-  \item \textbf{配置.} 使用官方发布的 checkpoint；SingGuard 各行采用论文
-        Sec.~2.6 中面向高吞吐基准评测的 \texttt{thinking\_type=fast}，贪心解码，
-        \texttt{max\_model\_len}=32768。
-  \item \textbf{MMDS 口径.} 语料自带官方 \texttt{set} 字段
-        （train 4045 / val 109 / test 330），我们与论文一致地评测 \emph{test} 划分。
-        若改为在全量语料上分层采样，SingGuard-8B 会掉到 0.7722/0.7209------该列此前的
-        差距源于我们这边的采样错误，而非协议或权重的差异。
-  \item \textbf{SPA-VL 协议.} 官方测试集为 EvalHarm (265) + EvalHelp (265)；其文件名
-        \emph{并非}查询安全性标签（EvalHelp 衡量有用性，且包含带仇恨标注的图像；EvalHarm
-        衡量拒答行为）。我们按 harm$\rightarrow$unsafe / help$\rightarrow$safe 映射，
-        这是与该列论文数值最自洽的读法；其绝对值应视为依赖协议。
-  \item \textbf{JailBreakV 覆盖率.} HF 上仅有约 360 张（共 28{,}000 张）图像，
-        因此我们采样的 1000 行中有 662 行为纯文本。在带图像子集（该基准的设计形态）上，
-        SingGuard-8B 的 F1 为 0.9600，论文为 0.9728。
-  \item \textbf{有三列全为 unsafe，其 F1 实际只是召回率.} JailBreakV、VLSBench、MM-Safety
-        在采样到的每一行 gold 均为 unsafe（攻击基准的设计如此）。没有负例则 FP 恒为 0、
-        precision 恒为 1，于是 $F1 = 2R/(1+R)$------**这三列度量的是召回，不是综合判别力**，
-        读表时不应与其余列等同看待。它们对"采样到哪些攻击"也格外敏感。
-  \item \textbf{基线实现保真度.} 每条基线都走其自身发布的 prompt/模板，而非统一模板。
-        由此发现并修复了两处缺陷：LlavaGuard 的模板以 \texttt{chat\_template.json} 形式发布
-        且 \texttt{tokenizer\_config} 中没有内联副本，导致 vLLM 静默改用通用模板，
-        26\% 的样本返回缺失开头键的 JSON 残片；GuardReasoner-VL 的官方接口
-        （INSTRUCTION 作为 system message、\texttt{Human user:/AI assistant:} 转录、
-        结论置于 \texttt{<result>} 块）并非常规 chat 调用。总体而言基线 prompt 仍是近似------
-        论文只公布了 SingGuard 的模板------故其逐列 $\Delta$ 仅供参考，并非精确值。
-  \item \textbf{LLaVAShield 的验证价值.} 该模型的发布权重是 LLaVA-NeXT 训练格式
-        （\texttt{LlavaQwenForCausalLM}，无 \texttt{auto\_map}），vLLM 与 transformers 都无法直接加载；
-        我们做了纯键名重映射的转换（765/765 张量，无 reshape）。转换正确性有一个强判据：
-        MMDS 的评级就是该模型自己生成的（论文 MMDS-Q 0.9913），而我们的 VLSBench 0.9919 /
-        MM-Safety 0.9974 与论文的 0.9939 / 0.9932 几乎一致------错配的权重不可能复现到这个程度。
-  \item \textbf{LLaVAShield 在 MMDS 两列偏低.} 0.8667 / 0.8160 vs 论文 0.9913 / 0.9653。
-        原因是上下文而非转换：该 checkpoint 的 \texttt{max\_position\_embeddings} 是 32768，
-        而 MMDS-Q 有 24/330 条提示超出该上限（最长 49255 token）被 vLLM 拒绝、按协议记为错误，
-        且**这些行全是 unsafe 标签**。precision 为 1.0000（从不误报），缺口集中在召回。
-  \item \textbf{LlavaGuard 的 MMDS 两列记为 N/A.} 该模型是 LLaVA-1.5 架构，真实上下文
-        只有 4096 token，而 MMDS 的对话（含每图 576 token 的视觉输入）远超这个长度：
-        实际只有 49/330（Q）与 54/327（R）行能被装下，其余被 vLLM 以 400 拒绝。在 15\%
-        覆盖率上算出的 F1（0.0186 / 0.0000）是上下文上限的度量，不是模型判断力的度量，
-        因此留空------论文该列为 0.6800 / 0.6972，说明其评测做了截断或不同的输入组装。
-  \item \textbf{Qwen3-VL-235B 走 llama.cpp 量化路线.} 该模型只有 FP8 版开放权重（221.3 GiB），
-        且它有 64 个注意力头------tensor-parallel 的世界大小必须整除 64，**5 卡不是合法分片数**，
-        单节点 8 卡才是唯一本地配置。实测两节点之间**无任何 RDMA 硬件、无 NVLink、链路仅
-        1 GbE（87.4 MB/s）**，跨节点 TP=8 约 2 tok/s，不可行。最终改用 \textbf{llama.cpp +
-        GGUF Q4\_K\_M（142 GB）+ MoE 专家卸载到节点内存}的单节点方案（该节点有 455 GB 空闲内存）。
-        \textbf{注意：4bit 量化不是论文的 bf16/FP8 配置，此行的绝对值仅供参考趋势，
-        不可与其余行等同对比。}
-  \item \textbf{Qwen3-VL-235B 的两个 MMDS 列是抽样估计，且走的是 API 通道.} 本地
-        llama.cpp 跑 MMDS 需要约 3 分钟/样本（对话中位数 7{,}472 字符 + 3.3 张图），
-        故这两列改用官方 API 抽样：MMDS-Q 取前 200 条（其中 29 条因**配额耗尽返回 429**，
-        属于通道失败而非模型判断，已排除），在 171 条上得 $F1 = 0.5581$（$P = 1.000$、
-        $R = 0.387$）；MMDS-R 因配额用尽未能运行。实测成本为 **3{,}414 token/条**
-        （是全量 657 条约需 2.2M token），故只做了抽样。
-        \textbf{该行不参与与论文的逐列对比}------它既非完整采样，也非本地权重。
-  \item \textbf{Qwen3-VL-235B 的本地 6 列用的是 4bit 量化，不是论文的配置.} 该行前 6 列由
-        llama.cpp 跑 GGUF Q4\_K\_M（142 GB）得到，**4bit 量化与论文的 bf16/FP8 不是一回事**，
-        故此行的绝对值只能看趋势、不能与论文逐列对比。一个支持"量化不是主因"的观察：
-        三列全 unsafe 的基准里 precision 都是 1.0000（从不误报），缺口全在召回------
-        VLSBench $R=0.130$、MM-Safety $R=0.321$、JailBreakV $R=0.768$；而我们此前跑的
-        Qwen3-VL-8B 在这三列呈现**同样的塌陷形态**（VLSBench 0.3207、MM-Safety 0.5005，
-        均远低于论文）。所以 VLSBench/MM-Safety 的低分更像是 Qwen3-VL 系列在这些攻击类型
-        上的固有保守，或提示词/解析口径差异，而非量化损失。
-  \item \textbf{评测口径.} 全部基线均使用各自发布的 prompt/模板（非统一模板），
-        但仍属近似------论文只公布了 SingGuard 的模板------故基线行的逐列 $\Delta$ 供参考。
-  \item \textbf{ShieldGemma-2 是纯图像分类器}，无图的行直接跳过，故其 JailBreakV 一列
-        只覆盖有图的 338 条（JailBreakV 公开图像仅 ~360 张）。
+\begin{itemize}\itemsep1pt
+  \item \textbf{三列全 unsafe，其 F1 实为召回率.} JailBreakV、VLSBench、MM-Safety 无 safe 样本，
+        故 precision 恒为 1、$F1 = 2R/(1+R)$------不能与其余列等同解读，对采样到哪些攻击也极敏感。
+  \item \textbf{MMDS 口径（最大修正）.} 语料自带 \texttt{set} 字段（train/val/test $=$ 4045/109/330），
+        我们最初漏了它、在全量上采样（93\% 是训练集）。改评 test 后 SingGuard-8B 由 0.7722/0.7209
+        升到 \textbf{0.9571/0.8908}（论文 0.9851/0.8963）。
+  \item \textbf{基线必须用各自的官方 prompt.} 用通用提示词会让模型输出错格式而被判错：
+        GuardReasoner-VL（需 system 消息 $+$ \texttt{<result>} 块）修复后 VLGuard 0.2973$\rightarrow$0.8822；
+        LlavaGuard 用官方策略文本后 26\% 的解析失败归零。
+  \item \textbf{剩余缺口均已归因.} SPA-VL：官方 test 无查询安全性标签，协议存歧义；
+        JailBreakV：公开图像只有 360/28000；LlavaGuard（4096 上下文）与 LLaVAShield 在 MMDS 上
+        卡的是上下文上限，并非模型能力。
+  \item \textbf{结论：发布权重可以复现 Table~4.} 八列平均 2B 0.8978（$\Delta$+0.005）、
+        8B 0.8828（$\Delta$−0.026），逐列 $|\Delta|$ 多数 $\leq$0.03。
+  \item \textbf{Qwen3-VL-235B 为 4bit 量化（Q4\_K\_M）}，非论文的 bf16/FP8，只能看趋势；
+        其 MMDS-Q 为 API 抽样估计、MMDS-R 未跑。
 \end{itemize}
 
 \end{document}
