@@ -117,28 +117,29 @@ def load_results(paths: list[Path]) -> pd.DataFrame:
 
 NOTES_BLOCK = r"""
 \section*{说明}
-\begin{itemize}\itemsep1pt
-  \item \textbf{基准分组（原文 Table~4 说明）.} 视觉语言越狱（JailBreakV、VLSBench、MM-Safety）、
-        政策驱动的多模态审核（VLGuard、SPA-VL、BeaverTails-V）、MMDS 的查询/响应拆分
-        （MMDS-Q 判用户侧意图、MMDS-R 判助手侧协助，两者独立评分）。
-  \item \textbf{评测协议（原文 4.1）.} 全部基准走同一生成式 guard 接口；解析\textbf{首个}
-        safe/unsafe 判定 token，需归因时取 \texttt{<answer>} 内的类别；无法给出判定的输出
-        \textbf{按错误计、不重试}。query-side 判请求本身是否应拦截，response-side 判回复是否构成
-        有害协助，多模态 response 基准按 (query, image, response) 三元组联合判定。
-  \item \textbf{三列越狱类基准（原文 4.2 的提醒）.} 原文指出这三列"会被专门训练于越狱模板的 guard
-        刷至饱和，单一聚合数值可能掩盖对拒绝模板的过拟合"。本表中 JailBreakV、VLSBench、MM-Safety
-        采样到的每一行 gold 均为 unsafe，故 precision 恒为 1、$F1 = 2R/(1+R)$------\textbf{其数值只反映召回}。
-  \item \textbf{MMDS 口径.} 语料自带 \texttt{set} 字段（train/val/test $=$ 4045/109/330），
-        与原文一致评测 test 划分。八列宏平均：SingGuard-2B 0.8978、4B 0.8707、8B 0.8828
-        （原文 0.8924 / 0.8945 / 0.9092）。
-  \item \textbf{其余各列差异的来源.} SPA-VL：官方 test 集为 EvalHarm + EvalHelp，
-        \emph{本身不含查询安全性标签}，映射依赖协议选择；JailBreakV：公开图像仅 360/28000，
-        我们 1000 条中 662 条为纯文本；LlavaGuard 与 LLaVAShield 在 MMDS 上受各自上下文上限
-        （4096 / 32768）限制，超出部分按协议记为错误。
-  \item \textbf{基线提示词.} 原文仅公布 SingGuard 的模板，基线提示词依其各自模型卡组装，
-        故基线行的逐列 $\Delta$ 为参考值。
-  \item \textbf{Qwen3-VL-235B 为 4bit 量化（Q4\_K\_M）}，非原文的 bf16/FP8，仅供趋势参考；
-        其 MMDS-Q 为 API 抽样估计、MMDS-R 未跑。
+本表只列出两类内容：原文未作规定、由我们选定的口径；以及原文自己指出有问题的部分。
+原文已经写明的评测协议与基准分组不再重复。
+
+\begin{itemize}\itemsep4pt
+  \item \textbf{三列越狱类基准的读法.}
+        原文已提醒这三列"会被专门训练于越狱模板的 guard 刷至饱和"。
+        在我们的采样中，JailBreakV、VLSBench、MM-Safety 的每一行 gold 都是 unsafe，
+        于是 precision 恒为 1、$F1 = 2R/(1+R)$------\textbf{这三列只反映召回，不能与其余列等同看待。}
+  \item \textbf{MMDS 的划分.}
+        语料自带 \texttt{set} 字段（train/val/test $=$ 4045/109/330），我们取 test 划分。
+  \item \textbf{SPA-VL 的标签映射.}
+        官方 test 集为 EvalHarm 与 EvalHelp，其文件名不含查询安全性标签；
+        我们按 harm$\rightarrow$unsafe、help$\rightarrow$safe 映射。
+  \item \textbf{JailBreakV 的输入形态.}
+        公开图像只有 360/28000 张，我们采样的 1000 条中有 662 条为纯文本。
+  \item \textbf{MMDS 上两个模型的上下文边界.}
+        LlavaGuard（4096）与 LLaVAShield（32768）各有部分样本超出自身上下文上限，
+        按协议记为错误；LlavaGuard 的 MMDS 两列因此覆盖率不足，留空。
+  \item \textbf{基线提示词.}
+        原文只公布了 SingGuard 的模板，基线按其各自模型卡组装，故基线行的 $\Delta$ 为参考值。
+  \item \textbf{Qwen3-VL-235B 的限定.}
+        本地六列使用 4bit 量化（Q4\_K\_M）；MMDS-Q 为 API 抽样估计、MMDS-R 未运行。
+        该行仅供趋势参考。
 \end{itemize}
 """
 
